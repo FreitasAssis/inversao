@@ -1,0 +1,376 @@
+import { describe, expect, test } from 'vitest'
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { Board } from '../../src/ui/Board'
+import { applyAction, startMatch } from '../../src/engine/match'
+import type { Match } from '../../src/engine/match'
+import type { Placement } from '../../src/engine/types'
+
+const rodizio = () => startMatch({ board: 'dbu', mechanic: 'rotation' })
+
+/** Renders and hands back whatever the last onPlay reported. */
+function setup(match: Match = rodizio()) {
+  const played: unknown[] = []
+  render(<Board match={match} onPlay={(action) => played.push(action)} />)
+  return { played, user: userEvent.setup() }
+}
+
+describe('Board', () => {
+  test('names the cells so they can be read out and reasoned about', () => {
+    setup()
+
+    expect(screen.getByRole('gridcell', { name: /A1/ })).toBeInTheDocument()
+    expect(screen.getByRole('gridcell', { name: /D3/ })).toBeInTheDocument()
+  })
+
+  test('says whose turn it is and which piece moves', () => {
+    setup()
+
+    // The classic slip in local two-player is moving on the other side's turn,
+    // so this is stated rather than implied by colour (project doc 6.1).
+    expect(screen.getByRole('status')).toHaveTextContent(/azul/i)
+    expect(screen.getByRole('status')).toHaveTextContent(/quadrado/i)
+  })
+
+  test('keeps every cell reachable, legal or not', () => {
+    // Cells are not `disabled`: a disabled button takes no focus, so the board
+    // would be unreadable from the keyboard and to a screen reader. Illegal
+    // cells are marked instead, and simply do nothing when activated.
+    setup()
+
+    for (const name of ['A1', 'B2', 'D3']) {
+      const cell = screen.getByRole('gridcell', { name: new RegExp(name) })
+      expect(cell).not.toBeDisabled()
+    }
+    expect(screen.getByRole('gridcell', { name: /B1/ })).toHaveAttribute(
+      'aria-disabled',
+      'false',
+    )
+    expect(screen.getByRole('gridcell', { name: /B2/ })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    )
+  })
+
+  test('does nothing when an illegal cell is activated', async () => {
+    const { played, user } = setup()
+
+    await user.click(screen.getByRole('gridcell', { name: /B2/ }))
+
+    expect(played).toEqual([])
+  })
+
+  test('walks the grid with the arrow keys', async () => {
+    // A 4x3 grid is navigated, not tabbed through: one tab stop, arrows inside.
+    const { user } = setup()
+
+    await user.tab()
+    expect(screen.getByRole('gridcell', { name: /A1/ })).toHaveFocus()
+
+    await user.keyboard('{ArrowRight}')
+    expect(screen.getByRole('gridcell', { name: /A2/ })).toHaveFocus()
+
+    await user.keyboard('{ArrowDown}')
+    expect(screen.getByRole('gridcell', { name: /B2/ })).toHaveFocus()
+
+    await user.keyboard('{ArrowLeft}')
+    expect(screen.getByRole('gridcell', { name: /B1/ })).toHaveFocus()
+  })
+
+  test('reports the move when a legal cell is chosen', async () => {
+    const { played, user } = setup()
+
+    await user.click(screen.getByRole('gridcell', { name: /B1/ }))
+
+    expect(played).toEqual([{ type: 'move', piece: 'square', to: 3 }])
+  })
+
+  test('can be played from the keyboard alone', async () => {
+    // Keyboard support goes in while the board is being built, not later: it
+    // changes how cells are rendered and focused (project doc 11, step 2).
+    const { played, user } = setup()
+
+    await user.tab()
+    await user.keyboard('{ArrowDown}{Enter}')
+
+    expect(played).toEqual([{ type: 'move', piece: 'square', to: 3 }])
+  })
+
+  test('states the piece and owner in text, not only in colour', () => {
+    // Colour must never be the only channel: the accessible name carries the
+    // owner and the symbol, which is also what the colourless mode relies on.
+    setup()
+
+    expect(screen.getByRole('gridcell', { name: /A1.*azul.*quadrado/i })).toBeInTheDocument()
+  })
+
+  test('announces a pass instead of showing a dead board', () => {
+    const boxed = {
+      ...startMatch({ board: 'dbu', mechanic: 'rotation', opening: 'circle' }),
+      placement: { blue: [0, 1, 3], orange: [9, 10, 11] },
+    } as Match
+
+    setup(boxed)
+
+    expect(screen.getByRole('status')).toHaveTextContent(/passa/i)
+    expect(screen.getByRole('button', { name: /passar/i })).toBeInTheDocument()
+  })
+
+  test('draws the middle band, which is what tells the boards apart', async () => {
+    // Twelve identical squares render the Ponte and the Setas the same way, and
+    // the rule that separates them disappears (spec 1.2).
+    const { container } = render(
+      <Board match={startMatch({ board: 'nbn', mechanic: 'rotation' })} onPlay={() => {}} />,
+    )
+
+    const links = [...container.querySelectorAll('[data-link]')].map((node) =>
+      node.getAttribute('data-link'),
+    )
+    expect(links).toEqual(['none', 'both', 'none'])
+  })
+
+  test('shows the one-way columns as one-way', async () => {
+    const { container } = render(
+      <Board match={startMatch({ board: 'dbu', mechanic: 'rotation' })} onPlay={() => {}} />,
+    )
+
+    const links = [...container.querySelectorAll('[data-link]')].map((node) =>
+      node.getAttribute('data-link'),
+    )
+    expect(links).toEqual(['down', 'both', 'up'])
+  })
+
+  test('splits the grid into the two blocks the band joins', () => {
+    // Rows A-B and C-D are one block each; crossing between them is the game.
+    const { container } = render(<Board match={rodizio()} onPlay={() => {}} />)
+
+    expect(container.querySelectorAll('[data-block]')).toHaveLength(2)
+  })
+})
+
+describe('naming a piece by clicking it', () => {
+  /** Escolha Sorteada with the initiative already drawn for blue. */
+  function naming() {
+    const drawn = applyAction(startMatch({ board: 'dbu', mechanic: 'choice' }), {
+      type: 'draw',
+      initiative: 'blue',
+    })
+    if (!drawn.ok) throw new Error(drawn.reason)
+    return drawn.match
+  }
+
+  test('marks the pieces that can be named', () => {
+    // Naming is the decision of the game, so it happens on the board, not in a
+    // list of words beside it.
+    render(<Board match={naming()} onPlay={() => {}} />)
+
+    for (const name of ['A1', 'A2', 'A3']) {
+      expect(screen.getByRole('gridcell', { name: new RegExp(name) })).toHaveAttribute(
+        'data-nameable',
+        'true',
+      )
+    }
+    expect(screen.getByRole('gridcell', { name: /D1/ })).not.toHaveAttribute('data-nameable')
+  })
+
+  test('lights the destinations once a piece is picked', async () => {
+    const user = userEvent.setup()
+    render(<Board match={naming()} onPlay={() => {}} />)
+
+    await user.click(screen.getByRole('gridcell', { name: /A1/ }))
+
+    // Blue's square on A1 can only reach B1.
+    expect(screen.getByRole('gridcell', { name: /B1/ })).toHaveAttribute('data-legal', 'true')
+  })
+
+  test('plays the move on the second click', async () => {
+    const played: unknown[] = []
+    const user = userEvent.setup()
+    render(<Board match={naming()} onPlay={(action) => played.push(action)} />)
+
+    await user.click(screen.getByRole('gridcell', { name: /A1/ }))
+    await user.click(screen.getByRole('gridcell', { name: /B1/ }))
+
+    expect(played).toEqual([{ type: 'move', piece: 'square', to: 3 }])
+  })
+
+  test('offers the deliberate pass when a named piece cannot move', async () => {
+    // Naming a piece with nowhere to go is the game's sharpest move, not an
+    // error: you pass on purpose to force the opponent onto that symbol.
+    const boxed = { ...naming(), placement: { blue: [0, 1, 3], orange: [9, 10, 11] } } as Match
+    const played: unknown[] = []
+    const user = userEvent.setup()
+    render(<Board match={boxed} onPlay={(action) => played.push(action)} />)
+
+    await user.click(screen.getByRole('gridcell', { name: /A1/ }))
+    await user.click(screen.getByRole('button', { name: /passar/i }))
+
+    expect(played).toEqual([{ type: 'pass', piece: 'circle' }])
+  })
+})
+
+describe('showing a move happen', () => {
+  test('marks the piece about to move and where it is going', () => {
+    // The AI announces first and plays after. Without that the position simply
+    // changes and the player never sees what happened.
+    render(<Board match={rodizio()} onPlay={() => {}} telegraph={{ from: 0, to: 3 }} />)
+
+    expect(screen.getByRole('gridcell', { name: /A1/ })).toHaveAttribute('data-telegraph', 'from')
+    expect(screen.getByRole('gridcell', { name: /B1/ })).toHaveAttribute('data-telegraph', 'to')
+  })
+
+  test('marks nothing when nothing is announced', () => {
+    const { container } = render(<Board match={rodizio()} onPlay={() => {}} />)
+
+    expect(container.querySelectorAll('[data-telegraph]')).toHaveLength(0)
+  })
+
+  test('says the announced move out loud', () => {
+    render(<Board match={rodizio()} onPlay={() => {}} telegraph={{ from: 0, to: 3 }} />)
+
+    expect(screen.getByRole('status')).toHaveTextContent(/A1.*B1/i)
+  })
+
+  test('marks the piece that just arrived, so it can slide in', () => {
+    // Telegraph and slide are two halves of the same thing: one says what is
+    // about to happen, the other shows it happening.
+    const played = applyAction(rodizio(), { type: 'move', piece: 'square', to: 3 })
+    if (!played.ok) throw new Error(played.reason)
+
+    render(<Board match={played.match} onPlay={() => {}} />)
+
+    const arrived = screen.getByRole('gridcell', { name: /B1/ })
+    expect(arrived).toHaveAttribute('data-arrived', 'true')
+    expect(arrived).toHaveAttribute('data-from', '0')
+  })
+})
+
+describe('staging the draw', () => {
+  const sorteada = () => startMatch({ board: 'dbu', mechanic: 'choice' })
+
+  test('shows the draw while the round waits for it', () => {
+    render(<Board match={sorteada()} onPlay={() => {}} />)
+
+    expect(screen.getByRole('img', { name: /sorteando/i })).toBeInTheDocument()
+  })
+
+  test('keeps the board out of reach until the draw lands', () => {
+    // Spec 4.1: the draw is an event clearly *prior* to the decision, and only
+    // then does the board become interactive.
+    render(<Board match={sorteada()} onPlay={() => {}} />)
+
+    for (const name of ['A1', 'A2', 'A3']) {
+      expect(screen.getByRole('gridcell', { name: new RegExp(name) })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      )
+    }
+  })
+
+  test('shows who took it once it has landed', () => {
+    const drawn = applyAction(sorteada(), { type: 'draw', initiative: 'orange' })
+    if (!drawn.ok) throw new Error(drawn.reason)
+
+    render(<Board match={drawn.match} onPlay={() => {}} />)
+
+    expect(screen.getByRole('img', { name: /iniciativa.*laranja/i })).toBeInTheDocument()
+  })
+
+  test('never stages a draw in the Rodizio, which has none', () => {
+    render(<Board match={rodizio()} onPlay={() => {}} />)
+
+    expect(screen.queryByRole('img', { name: /sorteando|iniciativa/i })).toBeNull()
+  })
+})
+
+describe('changing your mind about a piece', () => {
+  function naming() {
+    const drawn = applyAction(startMatch({ board: 'dbu', mechanic: 'choice' }), {
+      type: 'draw',
+      initiative: 'blue',
+    })
+    if (!drawn.ok) throw new Error(drawn.reason)
+    return drawn.match
+  }
+
+  test('lets a chosen piece be dropped again', async () => {
+    // Naming is not committed until the move is: picking a piece and seeing
+    // where it can go is how you find out you wanted another one.
+    const user = userEvent.setup()
+    render(<Board match={naming()} onPlay={() => {}} />)
+
+    await user.click(screen.getByRole('gridcell', { name: /A1/ }))
+    expect(screen.getByRole('gridcell', { name: /B1/ })).toHaveAttribute('data-legal', 'true')
+
+    await user.click(screen.getByRole('gridcell', { name: /A1/ }))
+
+    expect(screen.getByRole('gridcell', { name: /B1/ })).not.toHaveAttribute('data-legal')
+    expect(screen.getByRole('status')).toHaveTextContent(/escolha uma peça/i)
+  })
+
+  test('switches straight to another piece', async () => {
+    const user = userEvent.setup()
+    render(<Board match={naming()} onPlay={() => {}} />)
+
+    await user.click(screen.getByRole('gridcell', { name: /A1/ }))
+    await user.click(screen.getByRole('gridcell', { name: /A3/ }))
+
+    // A3 holds blue's circle, which can only reach B3.
+    expect(screen.getByRole('status')).toHaveTextContent(/movendo o círculo/i)
+    expect(screen.getByRole('gridcell', { name: /B3/ })).toHaveAttribute('data-legal', 'true')
+  })
+
+  test('keeps the other pieces reachable while one is chosen', async () => {
+    const user = userEvent.setup()
+    render(<Board match={naming()} onPlay={() => {}} />)
+
+    await user.click(screen.getByRole('gridcell', { name: /A1/ }))
+
+    expect(screen.getByRole('gridcell', { name: /A2/ })).toHaveAttribute('data-nameable', 'true')
+  })
+})
+
+describe('empty landing slots', () => {
+  /** A midgame position: blue's circle and square slots are open on row D. */
+  const OPEN = { blue: [0, 1, 6], orange: [2, 11, 5] } as unknown as Placement
+  const midgame = () =>
+    render(
+      <Board
+        match={startMatch({ board: 'bbb', mechanic: 'choice' }, OPEN)}
+        onPlay={() => {}}
+      />,
+    )
+
+  test('says whose slot it is, in the pixels and not only in the label', () => {
+    // Without this there is no way to see which direction you are going. In a
+    // match you watched your pieces leave the top row, so you know; dropped
+    // into a puzzle midgame you have nothing, and every empty outline looks the
+    // same as every other. The screen reader was being told and the screen
+    // was not.
+    midgame()
+
+    const mine = document.querySelector('[data-cell="9"]')
+    expect(mine).toHaveAttribute('data-slot', 'circle')
+    expect(mine).toHaveAttribute('data-slot-side', 'blue')
+  })
+
+  test('tells the two sides apart, which is what makes direction readable', () => {
+    // Both home rows empty: three slots waiting at the top and three at the
+    // bottom. If they carried the same mark there would be no way to see which
+    // way you are travelling.
+    const CROSSED = { blue: [3, 4, 5], orange: [6, 7, 8] } as unknown as Placement
+    render(
+      <Board
+        match={startMatch({ board: 'bbb', mechanic: 'choice' }, CROSSED)}
+        onPlay={() => {}}
+      />,
+    )
+
+    const sides = [...document.querySelectorAll('[data-slot-side]')].map((cell) =>
+      cell.getAttribute('data-slot-side'),
+    )
+
+    expect(sides.filter((side) => side === 'blue')).toHaveLength(3)
+    expect(sides.filter((side) => side === 'orange')).toHaveLength(3)
+  })
+})

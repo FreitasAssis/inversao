@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Inversão">
+  <!--
+    The theorem, drawn: a circle split by an S. Rotate it half a turn and it is
+    itself with the colours swapped, which is exactly why P(azul vence) is 0,5
+    exact rather than merely close (spec 7.1) — the game is invariant under the
+    rotation that exchanges the two players. It is also the name.
+
+    No dots. They are the first thing to vanish when a mark is shrunk, and they
+    are what makes the symbol a borrowed one; without them this is a circle
+    inverted, and it arrives without the meditative baggage.
+
+    The same construction tools/icons.mjs rasterises: the dividing line is two
+    half-circles of half the radius, one bulging right across the top and one
+    bulging left across the bottom.
+  -->
+  <rect width="100" height="100" fill="#3d3d3a"/>
+  <circle cx="50" cy="50" r="38" fill="#ef9f27"/>
+  <path fill="#378add" d="M50 12 A19 19 0 0 1 50 50 A19 19 0 0 0 50 88 A38 38 0 0 0 50 12 Z" />
+</svg>

@@ -1,0 +1,1168 @@
+/*
+ * Colour carries the owner, symbol carries the destination, and the two are
+ * never mixed (spec 2). The colourless mode drops the hue and leans on fill and
+ * outline instead, so the board stays readable without it.
+ */
+
+:root {
+  --blue: #378add;
+  --orange: #ef9f27;
+  --line: #73726c;
+  --ink: #3d3d3a;
+  --paper: #faf9f5;
+  --legal: #2f9e56;
+  /*
+   * Every animation multiplies by this. The pacing risk runs both ways — the
+   * analysis warns the game may feel slow (project doc 13), while a move that
+   * simply appears is a move nobody saw — and which side you fall on is
+   * personal, so it is a dial rather than a decision. Zero means none.
+   */
+  /*
+   * Set from JavaScript, defaulting to 0 when the system asks for reduced
+   * motion (see settings.ts). Not enforced with a media query here: that would
+   * leave anyone with the system preference holding a dial that does nothing.
+   */
+  --beat: 1;
+  color-scheme: light dark;
+
+  /*
+   * A scale, because there was not one. The stylesheet had grown to nine font
+   * sizes and sixteen spacing values, several of them 0,05rem apart — which
+   * does not read as hierarchy, it reads as noise, and is most of what "falta
+   * alinhamento" meant.
+   *
+   * Five sizes and six spaces. If something needs a value that is not here, the
+   * scale is wrong and should change; reaching past it is how the last one came
+   * apart.
+   */
+  --text-xs: 0.8rem;
+  --text-sm: 0.9rem;
+  --text-md: 1rem;
+  --text-lg: 1.15rem;
+  --text-xl: 1.5rem;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2.5rem;
+
+  /*
+   * The gap between cells. Named because the slide animation has to compute
+   * the distance a piece travels from it — the two were the same number typed
+   * twice, and changing one silently broke the other.
+   */
+  --cell-gap: var(--space-2);
+
+  /* Corners, for the same reason they were needed above: they were 0,25 and
+     0,4 with nothing saying which was meant where. */
+  --radius: var(--space-2);
+  --radius-sm: var(--space-1);
+
+  /*
+   * How thick a hollow piece's outline is, as a fraction of the glyph — so it
+   * scales with the board instead of thinning out as the cells grow.
+   *
+   * The triangle needs its own polygon rather than the same inset, and not for
+   * a fiddly reason: offsetting a polygon inward by a uniform distance moves
+   * each vertex along its bisector by d / sin(half-angle), and a triangle's
+   * apex is the sharpest corner it has. Inset it by the same amount as the
+   * base and the outline comes out thin at the top — which is exactly what the
+   * hand-guessed version did, 12% at the base against 8% at the apex.
+   *
+   *   apex y = 2.236d    base y = 100 - d    x = 1.618d and 100 - 1.618d
+   */
+  --hollow: 11%;
+  --hollow-triangle: polygon(50% 24.6%, 82.2% 89%, 17.8% 89%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --line: #9c9a92;
+    --ink: #c2c0b6;
+    --paper: #1c1c1a;
+  }
+}
+
+/*
+ * There was no box-sizing reset, so every width was a content box and padding
+ * added on top of it. The settings dialog asked for `100vw - 2rem` and then
+ * put 3rem of padding inside, which is how it came to hang off the side of a
+ * phone.
+ */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.app {
+  /*
+   * Narrowed to the board's own width. It was 32rem against a board of 21rem,
+   * so the thing the page is about was the smallest element on it and
+   * everything around it ran wider — which is most of what reads as bad
+   * alignment.
+   */
+  max-width: 26rem;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-4);
+}
+
+h1 {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/*
+ * The mark beside the name, trading colours with it: a blue cycle takes an
+ * orange wordmark, so the pair is itself an inversion — the same operation the
+ * game is named after and the icon draws.
+ */
+.top h1 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.mark {
+  width: 3.2em;
+  height: 3.2em;
+  flex: none;
+}
+
+.mark[data-side='blue'] + span {
+  color: var(--orange);
+}
+
+.mark[data-side='orange'] + span {
+  color: var(--blue);
+}
+
+/*
+ * Colourless: the pair keeps its shape and drops the hue, like everything else.
+ *
+ * The rule used to stop at the name, so the mode left an ink wordmark beside a
+ * blue cycle — half the pair colourless, which is worse than either whole
+ * answer. Classes rather than attribute selectors because the ring carries
+ * `fill="none"` and blanket-setting a fill on it would fill the arcs in.
+ */
+.app[data-colourless] .mark[data-side] + span {
+  color: var(--ink);
+}
+
+.app[data-colourless] .mark .mark-shapes {
+  fill: var(--ink);
+}
+
+.app[data-colourless] .mark .mark-ring {
+  stroke: var(--ink);
+}
+
+.hint {
+  color: var(--line);
+  font-size: var(--text-sm);
+  margin: 0 0 var(--space-3);
+}
+
+/*
+ * The draw, as a coin. Chance decides who chooses, never what they play (spec
+ * 4.1), and confusing the two is what makes a game feel rigged — a coin says
+ * that on its own, because everybody already knows it has two faces.
+ *
+ * It sits above the board and settles before the board becomes touchable.
+ */
+.draw {
+  height: 2rem;
+  margin-bottom: var(--space-3);
+  perspective: 400px;
+}
+
+.coin {
+  display: block;
+  width: 1.7rem;
+  height: 1.7rem;
+  position: relative;
+  transform-style: preserve-3d;
+  animation: toss calc(0.7s * var(--beat)) linear infinite;
+}
+
+.face {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  backface-visibility: hidden;
+}
+
+.face[data-side='blue'] {
+  background: var(--blue);
+}
+
+/* The far face, so the coin shows one side at a time as it turns. */
+.face[data-side='orange'] {
+  background: var(--orange);
+  transform: rotateX(180deg);
+}
+
+/* Landed: stop turning and present the winner's face. */
+.coin[data-settled] {
+  animation: none;
+  transition: transform calc(0.45s * var(--beat)) cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+
+.coin[data-landed='blue'] {
+  transform: rotateX(0deg);
+}
+
+.coin[data-landed='orange'] {
+  transform: rotateX(180deg);
+}
+
+@keyframes toss {
+  to {
+    transform: rotateX(360deg);
+  }
+}
+
+/* Colour is never the only channel: filled versus hollow carries it too. */
+.app[data-colourless] .face[data-side='blue'] {
+  background: var(--ink);
+}
+
+.app[data-colourless] .face[data-side='orange'] {
+  background: var(--paper);
+  box-shadow: inset 0 0 0 3px var(--ink);
+}
+
+.turn {
+  display: block;
+  font-size: var(--text-md);
+  font-weight: 600;
+  margin-bottom: var(--space-4);
+}
+
+/*
+ * Two blocks of 2x3 joined by a middle band — not a 4x3 grid. The band is the
+ * only thing that separates the three boards (spec 1.2), so the gap and the
+ * links are structural, not decoration.
+ */
+.board {
+  display: grid;
+  gap: var(--cell-gap);
+  /* Fills the column it is in, rather than sitting narrow inside it. */
+  width: 100%;
+}
+
+.block {
+  display: grid;
+  gap: var(--cell-gap);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--cell-gap);
+}
+
+/*
+ * The gap between the two blocks is real estate, not padding: it is what the
+ * crossings span, and what the Ponte's outer columns conspicuously do not.
+ */
+.band {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--cell-gap);
+  height: 1.9rem;
+  margin: var(--space-1) 0;
+}
+
+/*
+ * No `overflow: visible` here. The first version had it and the artwork landed
+ * on top of the row below.
+ */
+.crossing {
+  width: 100%;
+  height: 100%;
+}
+
+/*
+ * The band is board, not player. It gets ink and grey and nothing else — a blue
+ * arrow would read as blue's crossing, when the whole point of a one-way column
+ * is that it constrains both sides equally.
+ */
+.track {
+  stroke: var(--ink);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.head {
+  fill: var(--ink);
+}
+
+/* A one-way column is the restriction, so it carries more weight than a free
+   crossing does. */
+.crossing[data-link='both'] .track {
+  stroke: var(--line);
+  stroke-width: 1.6;
+}
+
+.crossing[data-link='both'] .head {
+  fill: var(--line);
+}
+
+.cell {
+  aspect-ratio: 1;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: transparent;
+  display: grid;
+  place-items: center;
+  cursor: default;
+  padding: 0;
+}
+
+.cell[data-legal] {
+  cursor: pointer;
+  border-color: var(--legal);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--legal) 35%, transparent);
+}
+
+.cell[data-active] {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/*
+ * A move the AI has announced but not yet played. Both ends blink together, so
+ * the eye is already on the right two cells when the piece finally travels.
+ */
+.cell[data-telegraph] {
+  /* The static mark is the base, so it still reads with the dial at zero; the
+     animation blinks on top of it when there is one. */
+  box-shadow: inset 0 0 0 3px var(--ink);
+  animation: telegraph calc(0.7s * var(--beat)) ease-in-out infinite;
+}
+
+.cell[data-telegraph='to'] {
+  border-color: var(--legal);
+}
+
+@keyframes telegraph {
+  0%,
+  100% {
+    box-shadow: inset 0 0 0 2px transparent;
+  }
+  50% {
+    box-shadow: inset 0 0 0 3px var(--ink);
+  }
+}
+
+/*
+ * The piece that just landed slides in from where it came. Short on purpose:
+ * the pacing risk this game runs is feeling slow (project doc 13), so this is
+ * fast enough to read the travel and not to wait for it.
+ *
+ * `--dx` and `--dy` are the offset in cells; the CSS works out the distance,
+ * which keeps it correct whatever size the board is drawn at.
+ */
+.cell[data-arrived] .glyph {
+  animation: slide-in calc(0.18s * var(--beat)) ease-out;
+}
+
+@keyframes slide-in {
+  from {
+    transform: translate(
+      calc(var(--dx, 0) * (100% + var(--cell-gap))),
+      calc(var(--dy, 0) * (100% + var(--cell-gap)))
+    );
+  }
+  to {
+    transform: translate(0, 0);
+  }
+}
+
+/* Pieces the initiative holder may name: the choice happens on the board. */
+.cell[data-nameable] {
+  cursor: pointer;
+  border-color: var(--ink);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--ink) 25%, transparent);
+}
+
+.cell:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 3px;
+}
+
+/* The glyph is the piece; its shape is the destination, its fill the owner. */
+.glyph {
+  width: 58%;
+  height: 58%;
+}
+
+.cell[data-piece='circle'] .glyph {
+  border-radius: 50%;
+}
+
+.cell[data-piece='triangle'] .glyph {
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+.cell[data-side='blue'] .glyph {
+  background: var(--blue);
+}
+
+.cell[data-side='orange'] .glyph {
+  background: var(--orange);
+}
+
+/*
+ * Empty landing slots: thin outline, never filled, revealed as pieces leave.
+ *
+ * **In the owner's colour.** They used to all be neutral grey, which read fine
+ * in a match — you had watched your pieces leave the top row, so you knew which
+ * way you were going — and read as nothing at all in a puzzle, where somebody
+ * is dropped into the middle of a game and every empty outline looks like every
+ * other. The owner was in the accessible name and not in the pixels.
+ */
+.cell[data-slot-side='blue'] {
+  --slot: var(--blue);
+}
+
+.cell[data-slot-side='orange'] {
+  --slot: var(--orange);
+}
+
+.cell[data-slot]:not([data-piece]) .glyph {
+  border: 1.5px solid var(--slot, var(--line));
+  opacity: 0.75;
+}
+
+.cell[data-slot='circle']:not([data-piece]) .glyph {
+  border-radius: 50%;
+}
+
+/*
+ * A clip-path takes no border, so the triangle slot was drawn as a translucent
+ * *filled* triangle — which reads as a faded piece rather than an empty socket,
+ * and was the one shape that did not match the other two. Two nested clips make
+ * a real ring: the outer one is the outline, the inner one punches the paper
+ * back out of the middle.
+ */
+.cell[data-slot='triangle']:not([data-piece]) .glyph {
+  position: relative;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  background: var(--slot, var(--line));
+  border: none;
+}
+
+.cell[data-slot='triangle']:not([data-piece]) .glyph::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--paper);
+  clip-path: polygon(50% 13%, 87% 91%, 13% 91%);
+}
+
+/*
+ * Colourless: the outline style carries the owner, since the hue cannot. Same
+ * split the pieces use — one side plain, the other marked.
+ */
+.app[data-colourless] .cell[data-slot-side] {
+  --slot: var(--line);
+}
+
+.app[data-colourless] .cell[data-slot-side='orange']:not([data-piece]) .glyph {
+  border-style: dashed;
+}
+
+/*
+ * Colourless: owner becomes filled versus hollow. Symbol is untouched, because
+ * it was already the only channel carrying the destination.
+ */
+.app[data-colourless] .cell[data-side='blue'] .glyph {
+  background: var(--ink);
+}
+
+/*
+ * Hollow, and by the same means for all three shapes. This used to be an inset
+ * shadow, which a clip-path ignores — so the triangle had been settled
+ * separately with a translucent fill, and then with a hand-guessed inner
+ * polygon, and ended up a different weight from its two siblings either way.
+ *
+ * The outer element is the outline; the ::after punches the paper back out.
+ */
+.app[data-colourless] .cell[data-side='orange'] .glyph {
+  position: relative;
+  background: var(--ink);
+  box-shadow: none;
+}
+
+.app[data-colourless] .cell[data-side='orange'] .glyph::after {
+  content: '';
+  position: absolute;
+  inset: var(--hollow);
+  background: var(--paper);
+}
+
+.app[data-colourless] .cell[data-side='orange'][data-piece='circle'] .glyph::after {
+  border-radius: 50%;
+}
+
+/*
+ * The triangle takes the derived polygon rather than the same inset. Offsetting
+ * a polygon inward by a uniform distance moves each vertex along its bisector
+ * by d / sin(half-angle), and a triangle's apex is the sharpest corner it has —
+ * inset it like the base and the outline comes out thin at the top, which is
+ * what the hand-guessed version did: 12% at the base against 8% at the apex.
+ */
+.app[data-colourless] .cell[data-side='orange'][data-piece='triangle'] .glyph::after {
+  inset: 0;
+  clip-path: var(--hollow-triangle);
+}
+
+/*
+ * The panel. It was a single flex row that would not wrap, so it ran clean off
+ * the side of a page 32rem wide and every label inside it stacked into three
+ * cramped lines.
+ *
+ * A grid instead: as many columns as fit, each one a label over its control.
+ * The checkboxes are the exception — a tick belongs beside its words, not above
+ * them — and `:has` is what lets the stylesheet tell the two apart without the
+ * markup carrying a class for it.
+ */
+.controls {
+  display: grid;
+  /*
+   * Two columns on this measure, not three. At three, a column is about 7rem
+   * and "Escolha Sorteada" was being cut off inside its own select — and the
+   * longer checkbox labels wrapped to two lines while the short one did not,
+   * so every row sat at a different height.
+   */
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+  /* Its own subject, so it gets a rule rather than sitting against the game. */
+  margin-top: var(--space-6);
+  padding-top: var(--space-5);
+  border-top: 1px solid color-mix(in srgb, var(--line) 30%, transparent);
+  font-size: var(--text-xs);
+  color: var(--line);
+}
+
+.controls label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.controls label:has(input[type='checkbox']) {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* The tick keeps its size when the words beside it need two lines. */
+.controls input[type='checkbox'] {
+  flex: none;
+  margin: 0;
+}
+
+.controls select,
+.controls input[type='number'],
+.controls input[type='text'] {
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1);
+  min-width: 0;
+}
+
+.controls input[type='range'] {
+  width: 100%;
+  min-width: 0;
+}
+
+/*
+ * A button the engine would refuse right now — offering a draw or resigning
+ * while the round still waits on its initiative, because there is no turn for
+ * either to belong to.
+ *
+ * Marked rather than removed, and never with `disabled`: that would drop it out
+ * of the tab order and out of the screen reader, which is the mistake the board
+ * already avoids. It stays focusable, so it needs to *look* held too — an inert
+ * control that looks live is worse than no control.
+ */
+.offers button[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/*
+ * The whole solution is on the device. Said once, quietly, and never as a
+ * prerequisite: without it the search AI plays and plays well, so this is a
+ * note about what improved, not a warning about what was missing.
+ */
+.ready {
+  margin-top: var(--space-5);
+  font-size: var(--text-xs);
+  color: var(--line);
+}
+
+/* A control the level has taken over — the opening and the seats are fixed on
+   Insano and Impossivel, because there the theorem is what is being offered. */
+.controls [aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/*
+ * The daily puzzles. Three a day, one per board, each a real match over a
+ * position lifted out of the solution table (project doc 8).
+ */
+.puzzle .lead {
+  color: var(--line);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.streaks {
+  font-size: var(--text-sm);
+  color: var(--line);
+  margin-bottom: var(--space-6);
+}
+
+.streaks strong {
+  color: var(--ink);
+  font-size: var(--text-lg);
+}
+
+.puzzle-one {
+  margin-bottom: var(--space-6);
+  padding-top: var(--space-6);
+  border-top: 1px solid color-mix(in srgb, var(--line) 35%, transparent);
+}
+
+.puzzle-one h2 {
+  font-size: var(--text-md);
+  font-weight: 600;
+  margin: 0 0 var(--space-1);
+}
+
+.puzzle-one .tier {
+  color: var(--line);
+  font-weight: 400;
+}
+
+.ask {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--line);
+}
+
+/*
+ * The answer, and the reason to come back: the position is solved, so this can
+ * say what a move *cost* rather than only that it was wrong (project doc 8.4).
+ */
+.verdict {
+  margin-top: var(--space-3);
+  padding: var(--space-3) var(--space-3);
+  border-radius: var(--radius);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  border: 1px solid var(--line);
+}
+
+.verdict[data-right] {
+  border-color: var(--legal);
+}
+
+/*
+ * The evaluation bar (project doc 9). Exact rather than estimated, because it
+ * comes from the solved table — and only ever drawn between two humans.
+ */
+.evaluation {
+  margin-top: var(--space-3);
+}
+
+.bar {
+  height: 0.5rem;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--orange);
+}
+
+.share {
+  display: block;
+  height: 100%;
+  width: var(--blue-share, 50%);
+  background: var(--blue);
+  transition: width calc(0.35s * var(--beat)) ease-out;
+}
+
+/* Colour is never the only channel: the split is also written out below. */
+.evaluation-read {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-xs);
+  color: var(--line);
+}
+
+.app[data-colourless] .bar {
+  background: color-mix(in srgb, var(--ink) 25%, transparent);
+}
+
+.app[data-colourless] .share {
+  background: var(--ink);
+}
+
+/* Rodizio: three states and a distance, never a percentage the table lacks. */
+p.evaluation {
+  font-size: var(--text-xs);
+  color: var(--line);
+}
+
+p.evaluation strong {
+  color: var(--ink);
+}
+
+/*
+ * The finished match, read back (project doc 7.1). Not a chart with axes — it
+ * is a shape read at a glance, and the sentence underneath carries the numbers.
+ */
+.annotation {
+  margin-top: var(--space-6);
+  padding-top: var(--space-5);
+  border-top: 1px solid color-mix(in srgb, var(--line) 35%, transparent);
+}
+
+.annotation h2 {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  margin: 0 0 var(--space-3);
+}
+
+.curve {
+  display: block;
+  width: 100%;
+  height: 3.5rem;
+}
+
+/*
+ * Scoped names, and the hard way. These were `.level`, `.track` and `.turning`
+ * — and `.track` is also the shaft of the board's crossing arrows, three
+ * hundred lines up. The later rule won, so every one-way arrow on the board
+ * turned blue while its arrowhead stayed put. Nothing broke; it just went
+ * quietly wrong in a place unrelated to the change.
+ */
+.curve-level {
+  stroke: var(--line);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.5;
+}
+
+.curve-line {
+  fill: none;
+  stroke: var(--blue);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.curve-turn {
+  stroke: var(--orange);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.app[data-colourless] .curve-line {
+  stroke: var(--ink);
+}
+
+.app[data-colourless] .curve-turn {
+  stroke: var(--ink);
+  stroke-dasharray: 2 2;
+}
+
+.annotation-read {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--line);
+}
+
+.annotation-read strong {
+  color: var(--ink);
+}
+
+/*
+ * The result, said in front of the board rather than beside it. Big enough to
+ * read from across the room, because the end of a match is the one moment the
+ * game should interrupt.
+ */
+.board-area {
+  position: relative;
+}
+
+.outcome {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: var(--space-1);
+  text-align: center;
+  background: color-mix(in srgb, var(--paper) 78%, transparent);
+  backdrop-filter: blur(2px);
+  /*
+   * No radius. With `inset: 0` a rounded overlay leaves the four corners of the
+   * board uncovered, and the sharp, unblurred edges poke out past the veil.
+   */
+  z-index: 2;
+}
+
+.outcome-headline {
+  font-size: var(--text-xl);
+  line-height: 1.1;
+}
+
+.outcome-count {
+  font-size: var(--text-sm);
+  color: var(--line);
+}
+
+/* A win rises and overshoots slightly. */
+.outcome[data-tone='celebration'] {
+  animation: rise calc(0.5s * var(--beat)) cubic-bezier(0.2, 0.9, 0.3, 1.25);
+}
+
+/*
+ * A loss to the AI gets the same words and none of the bounce: it settles in
+ * from above, slowly, and the headline is muted. Confetti for someone who just
+ * lost is the game being tone deaf.
+ */
+.outcome[data-tone='defeat'] {
+  animation: settle calc(0.7s * var(--beat)) ease-out;
+}
+
+.outcome[data-tone='defeat'] .outcome-headline {
+  color: var(--line);
+  font-weight: 500;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(1.5rem) scale(0.94);
+  }
+}
+
+@keyframes settle {
+  from {
+    opacity: 0;
+    transform: translateY(-0.75rem);
+  }
+}
+
+/* The losing colour goes quiet, so the result reads on the position too. */
+.outcome[data-loser='blue'] ~ .board .cell[data-side='blue'] .glyph,
+.outcome[data-loser='orange'] ~ .board .cell[data-side='orange'] .glyph {
+  opacity: 0.3;
+  filter: saturate(0.3);
+}
+
+
+
+
+/*
+ * The rules page. Reference, never a gate — nobody has to come here to play,
+ * and every illustration is drawn by the real board so it cannot drift from
+ * the game.
+ */
+/*
+ * A rhythm, rather than margins argued one at a time: things inside a group get
+ * --space-2 or --space-3, and one group sits --space-6 from the next. This rule
+ * had no bottom margin at all, so the brand rested on the first line of the
+ * game.
+ */
+.top {
+  display: flex;
+  /* Centred, not baseline: the h1 is a flex container now, and a flex box
+     takes its baseline from its first child — the SVG, which has none. */
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.top nav {
+  display: flex;
+  /*
+   * Without this the links stretch to the tallest item — the gear — and their
+   * text ends up centred inside a box taller than itself, which is what puts
+   * the underlines out of line with each other.
+   */
+  align-items: center;
+  gap: var(--space-4);
+}
+
+/*
+ * What game this is — mechanic, board, difficulty — stays on the page.
+ *
+ * These three are not preferences, they are the *content*: three topologies and
+ * two mechanics is what the project has to show, and behind a gear most people
+ * would play one combination and leave without learning the others exist.
+ * Everything that is genuinely a preference went into the dialog.
+ */
+.setup {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+  font-size: var(--text-xs);
+  color: var(--line);
+}
+
+.setup label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/*
+ * The settings, over the board. A native dialog, so the browser handles the
+ * focus trap, Escape and the inert page behind — none of which is worth
+ * hand-rolling.
+ */
+/*
+ * The target and the drawing are sized separately, on purpose. A button small
+ * enough to sit neatly on a line of 0,9rem text is too small to hit with a
+ * thumb; one big enough to hit towers over the words beside it and drags the
+ * whole header's alignment with it.
+ *
+ * So the button keeps a thumb-sized box and the gear inside it is drawn to the
+ * text's own line, with the difference as invisible padding. The negative
+ * margin keeps that padding from inflating the header it sits in.
+ */
+.gear {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin: calc(-1 * var(--space-2)) calc(-1 * var(--space-3));
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--line);
+  cursor: pointer;
+}
+
+.gear:hover {
+  color: var(--ink);
+}
+
+.gear svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.settings {
+  width: min(26rem, calc(100vw - 2 * var(--space-4)));
+  max-height: 85vh;
+  overflow-y: auto;
+  /*
+   * No padding here on purpose. A click on the dialog's own padding targets the
+   * dialog, and that is the same signal as a click on the backdrop — so the
+   * padding lives on the body inside, and "did this click land on the element
+   * itself" means "outside" and nothing else.
+   */
+  padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.settings::backdrop {
+  background: rgb(0 0 0 / 0.55);
+}
+
+.settings-body {
+  padding: var(--space-5);
+}
+
+/* Inside the dialog the panel is the whole subject, so it drops the rule and
+   the top margin that separated it from the game. */
+.settings .controls {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.top a {
+  color: var(--line);
+  font-size: var(--text-sm);
+  /* The underline is the link's non-colour cue and stays; it only needs to
+     stop crowding the descenders. */
+  text-underline-offset: 0.2em;
+}
+
+.rules {
+  max-width: 34rem;
+}
+
+.rules .lead {
+  font-size: var(--text-md);
+}
+
+.rules section {
+  margin-top: var(--space-6);
+}
+
+.rules h2 {
+  font-size: var(--text-md);
+  margin-bottom: var(--space-2);
+}
+
+.rules h3 {
+  font-size: var(--text-sm);
+  margin: 0 0 var(--space-2);
+}
+
+.rules p {
+  line-height: 1.5;
+}
+
+/* The point that decides whether the mechanic reads as fair, so it is set apart. */
+.rules .aside {
+  border-left: 2px solid var(--line);
+  padding-left: var(--space-3);
+  color: var(--line);
+}
+
+.rules .board {
+  margin: var(--space-4) 0;
+}
+
+.rules-boards {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.rules figure {
+  margin: 0;
+}
+
+.rules figcaption {
+  color: var(--line);
+  font-size: var(--text-sm);
+}
+
+/* Illustrations are for looking at, not for touching. */
+.rules .cell {
+  cursor: default;
+  pointer-events: none;
+}
+
+/*
+ * The analysis page. The project doc calls it the differentiator, so it is
+ * given room to be read rather than skimmed.
+ */
+.analysis table {
+  border-collapse: collapse;
+  margin: var(--space-3) 0;
+  font-size: var(--text-sm);
+  width: 100%;
+}
+
+.analysis th,
+.analysis td {
+  text-align: left;
+  padding: var(--space-1) var(--space-3) var(--space-1) 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 35%, transparent);
+}
+
+.analysis th {
+  color: var(--line);
+  font-weight: 500;
+}
+
+.analysis ul {
+  line-height: 1.6;
+  padding-left: var(--space-4);
+}
+
+.analysis code {
+  font-size: 0.9em;
+}
+
+/* The seal: quiet on the board, and the way in to the proof. */
+/*
+ * The buttons. There were none — every one of them was raw browser chrome, so
+ * "Propor empate" and "Desistir" sat welded together and the seal ran into
+ * "Nova partida" on the same line.
+ *
+ * Scoped rather than a blanket `button` rule: the twelve cells of the board are
+ * buttons too, and they are already dressed as squares.
+ */
+.offers button,
+.board-area > button,
+.restart {
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-3);
+  cursor: pointer;
+}
+
+/* The way out, on its own line and last. It is a link on some pages and a
+   button on others, and it should read the same on both. */
+.restart {
+  display: block;
+  margin-top: var(--space-5);
+  text-decoration: none;
+  width: fit-content;
+}
+
+.offers button:hover,
+.board-area > button:hover,
+.restart:hover {
+  border-color: var(--ink);
+}
+
+.offers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+/* A plain readout, and it needs room from the board above it. */
+.counter {
+  margin: var(--space-5) 0 0;
+  font-size: var(--text-xs);
+  color: var(--line);
+}
+
+.seal {
+  display: block;
+  margin-top: var(--space-6);
+  color: var(--line);
+  font-size: var(--text-xs);
+  letter-spacing: 0.02em;
+}

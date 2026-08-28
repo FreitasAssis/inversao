@@ -1,0 +1,4 @@
+# Static host, client-side routes: anything unknown is served the app, which
+# then decides which page it is. Without this, /regras 404s on a direct hit or
+# a refresh — the link somebody shares would be the one that breaks.
+/*  /index.html  200
