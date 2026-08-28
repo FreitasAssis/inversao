@@ -90,6 +90,26 @@ dist: tabelas $(DATA)/oraculos.json $(DATA)/puzzles.json
 	cp tabela-*.bin $(DATA)/oraculos.json $(DATA)/puzzles.json $(DIST)/
 	@echo "artefatos em $(DIST)"
 
+# ---------------------------------------------------------------- publicacao
+# O que o site precisa para ser publicado, e nada alem disso.
+#
+# Existe separado de 'dist' por um motivo que custa sete minutos: 'dist' pede
+# $(DATA)/puzzles.json como *alvo*, e esse alvo depende dos limites superiores,
+# que sao FORCE. Num clone limpo — que e o caso do ambiente de build do
+# Cloudflare — isso dispara a convergencia dos tres 'hi' inteiros para
+# reproduzir um arquivo que ja esta versionado e nao mudou.
+#
+# Aqui os dois JSON sao copiados como arquivos, nunca pedidos como alvos.
+#
+# Custo real: as tres tabelas da Escolha Sorteada, que sao FORCE de proposito
+# porque a tabela existir nao significa que convergiu. Cerca de seis minutos,
+# contra um teto de vinte no Pages.
+publica: tabelas
+	mkdir -p $(DIST)
+	cp tabela-*.bin $(DIST)/
+	cp $(DATA)/oraculos.json $(DATA)/puzzles.json $(DIST)/
+	@echo "artefatos em $(DIST)"
+
 limpa:
 	rm -f $(BINS) *.o
 
@@ -104,4 +124,4 @@ limpa-tudo: limpa
 oraculos.json: $(DATA)/oraculos.json
 puzzles.json: $(DATA)/puzzles.json
 
-.PHONY: all tabelas dist limpa limpa-tudo FORCE oraculos.json puzzles.json
+.PHONY: all tabelas dist publica limpa limpa-tudo FORCE oraculos.json puzzles.json
