@@ -124,13 +124,24 @@ e a mensagem de
 
 ## Publicando
 
+O site é construído pelo Cloudflare Pages a partir do repositório, e as tabelas
+**não são versionadas** — são geradas no próprio build:
+
 ```
-cd tools && make dist    # copia as tabelas para public/data
-cd .. && npm run build   # gera dist/, ~38 MB com as tabelas
+cd tools && make publica && cd .. && npm run build
 ```
 
-O `dist/` vai para o Cloudflare Pages. Dois arquivos de configuração viajam
-com ele, e ambos são contrato com o host:
+`make publica` existe separado de `make dist` por um motivo que custa sete
+minutos: `dist` pede `puzzles.json` como *alvo*, e esse alvo depende dos limites
+superiores, que são `FORCE`. Num clone limpo isso dispara a convergência dos
+três `hi` inteiros para reproduzir um arquivo que já está versionado e não
+mudou. O `publica` copia os dois JSON como arquivos e gera só as cinco tabelas
+que o site consome.
+
+O mesmo comando serve para rodar localmente antes de um `npm run preview`.
+
+Dois arquivos de configuração viajam no `dist/`, e ambos são contrato com o
+host:
 
 - `_redirects` manda qualquer endereço desconhecido para o `index.html`. Sem
   isso `/desafios` dá 404 em acesso direto ou recarga — o link que alguém
@@ -139,9 +150,8 @@ com ele, e ambos são contrato com o host:
   `no-cache`: um service worker guardado no cache HTTP continua decidindo o que
   toda visita futura recebe, e recarregar não o substitui.
 
-**As tabelas não são versionadas**, então o build precisa do `make dist` antes.
-Sem elas o jogo funciona, mas cai para a IA de busca e perde os níveis
-calibrados.
+Sem as tabelas o jogo funciona, mas cai para a IA de busca e perde os níveis
+calibrados, o *Insano* e o *Impossível*.
 
 ## Leitura
 
