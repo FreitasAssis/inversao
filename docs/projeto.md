@@ -306,10 +306,25 @@ Ordem de execução, a partir de `tools/`:
 
 ```
 make oraculos.json   # e valide o motor contra ele ANTES de gerar tabela
-make tabelas         # repita o alvo do sorteio ate parar de avisar
-make puzzles.json
-make dist            # leva tabelas e JSON para ../public/data
+make tabelas         # ~6 min: as tres da Escolha Sorteada convergem aqui
+make puzzles.json    # so quando as tabelas mudarem
+make publica         # leva as tabelas e os JSON versionados para ../public/data
+make dist            # idem, mas REGERA puzzles.json antes
 ```
+
+> **`publica` e `dist` não são a mesma coisa, e a diferença custa sete minutos.**
+> O `dist` pede `puzzles.json` como *alvo*, e esse alvo depende dos limites
+> superiores, que são `FORCE`. Num clone limpo — que é exatamente o ambiente de
+> build do Cloudflare — pedi-lo dispara a convergência dos três `hi` inteiros
+> para reproduzir um arquivo que já está versionado e não mudou.
+>
+> O `publica` copia os dois JSON como arquivos, nunca como alvos. É o que o
+> Pages roda, e sobra só o custo legítimo: as três tabelas da Escolha Sorteada,
+> que são `FORCE` de propósito porque a tabela existir não significa que
+> convergiu.
+>
+> Medido num clone limpo: **5m40s** para o `publica`, contra um teto de 20
+> minutos por build no Pages.
 
 Os dois JSON são pequenos e ficam versionados em `data/`. As tabelas `.bin` e os
 checkpoints ficam em `tools/`, fora do git: somam mais de 200 MB e saem do C.
