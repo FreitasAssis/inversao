@@ -93,7 +93,7 @@ data/     oraculos.json    — fixture de verificação do motor
 ```
 
 ```
-npm install && npm test     # 459 testes
+npm install && npm test     # 463 testes
 npm run dev                 # joga
 npm run build               # site estático em dist/
 ```
@@ -121,6 +121,27 @@ por necessidade — em `float` de 32 bits o alvo de convergência é inatingíve
 e a mensagem de
 "convergiu" passaria a significar estagnação. Detalhes na seção 2.7 de
 [docs/projeto.md](docs/projeto.md).
+
+## Publicando
+
+```
+cd tools && make dist    # copia as tabelas para public/data
+cd .. && npm run build   # gera dist/, ~38 MB com as tabelas
+```
+
+O `dist/` vai para o Cloudflare Pages. Dois arquivos de configuração viajam
+com ele, e ambos são contrato com o host:
+
+- `_redirects` manda qualquer endereço desconhecido para o `index.html`. Sem
+  isso `/desafios` dá 404 em acesso direto ou recarga — o link que alguém
+  compartilha seria justamente o que quebra.
+- `_headers` diz o que guardar. A regra que mais importa é `/sw.js` com
+  `no-cache`: um service worker guardado no cache HTTP continua decidindo o que
+  toda visita futura recebe, e recarregar não o substitui.
+
+**As tabelas não são versionadas**, então o build precisa do `make dist` antes.
+Sem elas o jogo funciona, mas cai para a IA de busca e perde os níveis
+calibrados.
 
 ## Leitura
 
