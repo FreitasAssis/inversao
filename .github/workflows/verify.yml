@@ -1,0 +1,56 @@
+# Verificação automática. Em inglês porque é configuração de ferramenta, como o
+# resto do código; os documentos e as mensagens de commit seguem em português.
+#
+# Isto NÃO publica. O deploy é do Cloudflare, disparado por push na main, e
+# manter as duas coisas separadas evita guardar um token de deploy aqui.
+name: verify
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  # Retorno rápido: o que quebra na maioria das vezes, em cerca de um minuto.
+  quick:
+    name: types, tests, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm test
+      - run: npm run build
+
+  # Os onze testes que a rápida pula.
+  #
+  # Sem as tabelas eles se pulam sozinhos — e pular em silêncio é o pior dos
+  # mundos, porque são exatamente os que conferem o motor em TypeScript contra
+  # o solucionador em C: que a enumeração canônica bate índice a índice, e que
+  # jogar a partida inteira pela tabela dá 283, 401 e 524 lances.
+  #
+  # Custa seis minutos de solver. Num repositório público o minuto é de graça, e
+  # a verificação é a coisa que este projeto tem de próprio.
+  tables:
+    name: against the generated tables
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: generate the five production tables
+        run: cd tools && make tabelas
+      - name: fail if any test silently skipped
+        run: |
+          npm test 2>&1 | tee /tmp/out
+          if grep -q "skipped" /tmp/out; then
+            echo "::error::algum teste foi pulado — as tabelas deveriam estar presentes"
+            exit 1
+          fi
