@@ -84,7 +84,7 @@ docs/     especificacao.md — as regras, os tabuleiros, os resultados
           projeto.md       — arquitetura do site, entrega, decisões
 src/      engine/          — o jogo, em TypeScript puro: sem React, sem I/O
           ui/              — o tabuleiro e o que o cerca
-public/   manifest.webmanifest, sw.js e os ícones — o que torna o site instalável
+public/   manifest.webmanifest, sw.js, _headers e os ícones
 tests/    espelha src/, mais os testes contra os oráculos em C
 tools/    quatro programas em C que geram os artefatos, mais o Makefile
           icons.mjs        — desenha os ícones do app, sem biblioteca de imagem
@@ -93,7 +93,7 @@ data/     oraculos.json    — fixture de verificação do motor
 ```
 
 ```
-npm install && npm test     # 467 testes
+npm install && npm test     # 468 testes
 npm run dev                 # joga
 npm run build               # site estático em dist/
 ```
@@ -147,14 +147,18 @@ navegador, então não existe código de servidor nenhum para declarar.
 No painel, o *Root directory* é a **raiz do repositório**, não `dist` — `dist`
 é a saída, e não existe no clone.
 
-Mais dois arquivos viajam dentro do `dist/`, e ambos são contrato com o host:
+Qualquer endereço desconhecido é servido como o `index.html`, pelo
+`not_found_handling` do `wrangler.jsonc`: `/desafios` e `/regras` são o mesmo
+documento, e sem isso um link compartilhado daria 404 em acesso direto.
 
-- `_redirects` manda qualquer endereço desconhecido para o `index.html`. Sem
-  isso `/desafios` dá 404 em acesso direto ou recarga — o link que alguém
-  compartilha seria justamente o que quebra.
-- `_headers` diz o que guardar. A regra que mais importa é `/sw.js` com
-  `no-cache`: um service worker guardado no cache HTTP continua decidindo o que
-  toda visita futura recebe, e recarregar não o substitui.
+**Não use um `_redirects` para isso.** A regra `/* /index.html 200` que o Pages
+aceitava é recusada pelo Workers, que normaliza `/index.html` de volta para `/`
+e detecta o laço. Há teste impedindo o arquivo de voltar.
+
+Um arquivo ainda viaja dentro do `dist/` e é contrato com o host: o `_headers`,
+que diz o que guardar. A regra que mais importa é `/sw.js` com `no-cache` — um
+service worker guardado no cache HTTP continua decidindo o que toda visita
+futura recebe, e recarregar não o substitui.
 
 Sem as tabelas o jogo funciona, mas cai para a IA de busca e perde os níveis
 calibrados, o *Insano* e o *Impossível*.
