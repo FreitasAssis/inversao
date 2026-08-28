@@ -45,8 +45,28 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - name: generate the five production tables
+
+      # As tabelas sao funcao pura do C: mesmo solver, mesmos bytes. Entao a
+      # chave do cache e o hash do que as deriva — nao a data, nao o commit.
+      #
+      # Sem isto todo PR pagava seis minutos de solver, inclusive os que so
+      # mexem em CSS. Com isto, so paga quem mexeu no que gera as tabelas.
+      #
+      # Os v_*.bin ficam de fora de proposito: sao estado de convergencia, 41 MB
+      # cada, e nao entram em nada que o site consuma.
+      - id: cache
+        uses: actions/cache@v4
+        with:
+          path: tools/tabela-*.bin
+          key: tables-${{ hashFiles('tools/*.c', 'tools/Makefile') }}
+
+      # Os alvos do sorteio sao FORCE de proposito — a tabela existir nao
+      # significa que convergiu —, entao o make refaria tudo mesmo com o cache
+      # quente. A condicao e o que torna o cache util.
+      - if: steps.cache.outputs.cache-hit != 'true'
+        name: generate the five production tables
         run: cd tools && make tabelas
+
       - name: fail if any test silently skipped
         run: |
           npm test 2>&1 | tee /tmp/out
