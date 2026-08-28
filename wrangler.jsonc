@@ -1,0 +1,24 @@
+{
+  // O que a Cloudflare precisa saber para publicar. Nada aqui é código de
+  // servidor, e é de propósito: o jogo inteiro — motor, busca, tabelas e
+  // desafios — roda no navegador, e a ausência de um `main` neste arquivo é a
+  // forma mais direta de dizer isso.
+  "name": "inversao",
+  "compatibility_date": "2026-08-28",
+
+  "assets": {
+    // A saída do Vite. O `npm run build` a produz e o `make publica`, rodado
+    // antes, põe as cinco tabelas dentro de `public/data` para que ela as leve
+    // junto.
+    "directory": "./dist",
+
+    // O roteador vive na página: `/desafios` e `/regras` são o mesmo
+    // documento. Sem isto, um link compartilhado dá 404 no acesso direto ou na
+    // recarga — justamente o link que alguém compartilharia.
+    //
+    // O `public/_redirects` diz o mesmo, e continua ali porque também vale se
+    // o projeto voltar a ser servido pelo Pages. Quem responder primeiro
+    // responde igual.
+    "not_found_handling": "single-page-application"
+  }
+}
