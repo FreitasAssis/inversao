@@ -93,7 +93,7 @@ data/     oraculos.json    — fixture de verificação do motor
 ```
 
 ```
-npm install && npm test     # 463 testes
+npm install && npm test     # 467 testes
 npm run dev                 # joga
 npm run build               # site estático em dist/
 ```
@@ -124,7 +124,7 @@ e a mensagem de
 
 ## Publicando
 
-O site é construído pelo Cloudflare Pages a partir do repositório, e as tabelas
+O site é construído pela Cloudflare a partir do repositório, e as tabelas
 **não são versionadas** — são geradas no próprio build:
 
 ```
@@ -140,8 +140,14 @@ que o site consome.
 
 O mesmo comando serve para rodar localmente antes de um `npm run preview`.
 
-Dois arquivos de configuração viajam no `dist/`, e ambos são contrato com o
-host:
+Publicado como **Worker com arquivos estáticos**, configurado em
+`wrangler.jsonc`. Não há `main` ali, e é de propósito: o jogo inteiro roda no
+navegador, então não existe código de servidor nenhum para declarar.
+
+No painel, o *Root directory* é a **raiz do repositório**, não `dist` — `dist`
+é a saída, e não existe no clone.
+
+Mais dois arquivos viajam dentro do `dist/`, e ambos são contrato com o host:
 
 - `_redirects` manda qualquer endereço desconhecido para o `index.html`. Sem
   isso `/desafios` dá 404 em acesso direto ou recarga — o link que alguém

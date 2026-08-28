@@ -15,12 +15,19 @@ de plataforma deve ser construído antes disso existir.
 |---|---|---|
 | front | React + TypeScript | reconhecimento em portfólio, melhor ferramental de PWA |
 | build | Vite | build estático, PWA plugin maduro |
-| hospedagem | Cloudflare Pages | custo zero, e o cron do anti-pausa fica no mesmo provedor |
+| hospedagem | Cloudflare Workers, só arquivos estáticos | custo zero, e o cron do anti-pausa fica no mesmo provedor |
 | tempo real | Supabase Realtime (Broadcast) | sem servidor próprio, plano gratuito folgado |
 | ping anti-pausa | Cloudflare Worker (cron trigger) | não desativa por inatividade do repositório |
 | custo anual | domínio, e nada mais | — |
 
 **Repositório público.** Num portfólio, o código costuma valer mais que o site.
+
+> **Sobre a hospedagem.** Começou como Pages e virou Worker com *static assets*,
+> que é para onde a Cloudflare migrou — a porta de entrada do painel já leva
+> para lá. Para este projeto é indiferente: os dois servem arquivo estático e
+> os dois leem `_headers` e `_redirects`. O que **não** muda é não haver código
+> de servidor: o `wrangler.jsonc` não declara `main`, e o jogo inteiro — motor,
+> busca, tabelas e desafios — roda no navegador.
 
 ---
 
