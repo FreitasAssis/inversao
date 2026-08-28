@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Inversão</title>
+    <meta
+      name="description"
+      content="Um jogo de tabuleiro abstrato para dois jogadores, resolvido por busca exaustiva antes de existir como jogo."
+    />
+
+    <!-- The manifest cannot follow a dark preference, so the pair below takes
+         over the browser chrome the moment the page loads. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#faf9f5" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#1c1c1a" media="(prefers-color-scheme: dark)" />
+
+    <!-- Vector for the tab, where it is drawn at whatever size the browser
+         wants; iOS ignores the manifest and reads its own link. -->
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

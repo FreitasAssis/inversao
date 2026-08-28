@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="300" viewBox="0 0 680 300" role="img">
+<title>Os tres tabuleiros do Inversao</title>
+<desc>Ponte, Grade e Setas: identicos exceto pela faixa central.</desc>
+<style>
+ .ln{stroke:#73726c;stroke-width:.7;fill:none}
+ .mid{stroke:#3d3d3a;stroke-width:1.7;fill:none}
+ .no{fill:#3d3d3a}
+ .tx{font-family:system-ui,sans-serif;font-size:13px;fill:#3d3d3a}
+ .tb{font-family:system-ui,sans-serif;font-size:11px;fill:#73726c}
+ @media (prefers-color-scheme:dark){.ln{stroke:#9c9a92}.mid{stroke:#c2c0b6}.no{fill:#c2c0b6}
+  .tx{fill:#c2c0b6}.tb{fill:#9c9a92}}
+</style>
+<defs><marker id="s" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+<path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+
+<g transform="translate(60,40)">
+ <line class="ln" x1="0" y1="0" x2="100" y2="0"/><line class="ln" x1="0" y1="50" x2="100" y2="50"/>
+ <line class="ln" x1="0" y1="130" x2="100" y2="130"/><line class="ln" x1="0" y1="180" x2="100" y2="180"/>
+ <line class="ln" x1="0" y1="0" x2="0" y2="50"/><line class="ln" x1="50" y1="0" x2="50" y2="50"/><line class="ln" x1="100" y1="0" x2="100" y2="50"/>
+ <line class="ln" x1="0" y1="130" x2="0" y2="180"/><line class="ln" x1="50" y1="130" x2="50" y2="180"/><line class="ln" x1="100" y1="130" x2="100" y2="180"/>
+ <line class="mid" x1="50" y1="50" x2="50" y2="130"/>
+ <circle class="no" cx="0" cy="0" r="3"/><circle class="no" cx="50" cy="0" r="3"/><circle class="no" cx="100" cy="0" r="3"/>
+ <circle class="no" cx="0" cy="50" r="3"/><circle class="no" cx="50" cy="50" r="3"/><circle class="no" cx="100" cy="50" r="3"/>
+ <circle class="no" cx="0" cy="130" r="3"/><circle class="no" cx="50" cy="130" r="3"/><circle class="no" cx="100" cy="130" r="3"/>
+ <circle class="no" cx="0" cy="180" r="3"/><circle class="no" cx="50" cy="180" r="3"/><circle class="no" cx="100" cy="180" r="3"/>
+ <text class="tx" x="50" y="215" text-anchor="middle">Ponte</text>
+ <text class="tb" x="50" y="233" text-anchor="middle">nbn — tudo passa por uma casa</text>
+</g>
+
+<g transform="translate(290,40)">
+ <line class="ln" x1="0" y1="0" x2="100" y2="0"/><line class="ln" x1="0" y1="50" x2="100" y2="50"/>
+ <line class="ln" x1="0" y1="130" x2="100" y2="130"/><line class="ln" x1="0" y1="180" x2="100" y2="180"/>
+ <line class="ln" x1="0" y1="0" x2="0" y2="50"/><line class="ln" x1="50" y1="0" x2="50" y2="50"/><line class="ln" x1="100" y1="0" x2="100" y2="50"/>
+ <line class="ln" x1="0" y1="130" x2="0" y2="180"/><line class="ln" x1="50" y1="130" x2="50" y2="180"/><line class="ln" x1="100" y1="130" x2="100" y2="180"/>
+ <line class="mid" x1="0" y1="50" x2="0" y2="130"/><line class="mid" x1="50" y1="50" x2="50" y2="130"/><line class="mid" x1="100" y1="50" x2="100" y2="130"/>
+ <circle class="no" cx="0" cy="0" r="3"/><circle class="no" cx="50" cy="0" r="3"/><circle class="no" cx="100" cy="0" r="3"/>
+ <circle class="no" cx="0" cy="50" r="3"/><circle class="no" cx="50" cy="50" r="3"/><circle class="no" cx="100" cy="50" r="3"/>
+ <circle class="no" cx="0" cy="130" r="3"/><circle class="no" cx="50" cy="130" r="3"/><circle class="no" cx="100" cy="130" r="3"/>
+ <circle class="no" cx="0" cy="180" r="3"/><circle class="no" cx="50" cy="180" r="3"/><circle class="no" cx="100" cy="180" r="3"/>
+ <text class="tx" x="50" y="215" text-anchor="middle">Grade</text>
+ <text class="tb" x="50" y="233" text-anchor="middle">bbb — corrida limpa</text>
+</g>
+
+<g transform="translate(520,40)">
+ <line class="ln" x1="0" y1="0" x2="100" y2="0"/><line class="ln" x1="0" y1="50" x2="100" y2="50"/>
+ <line class="ln" x1="0" y1="130" x2="100" y2="130"/><line class="ln" x1="0" y1="180" x2="100" y2="180"/>
+ <line class="ln" x1="0" y1="0" x2="0" y2="50"/><line class="ln" x1="50" y1="0" x2="50" y2="50"/><line class="ln" x1="100" y1="0" x2="100" y2="50"/>
+ <line class="ln" x1="0" y1="130" x2="0" y2="180"/><line class="ln" x1="50" y1="130" x2="50" y2="180"/><line class="ln" x1="100" y1="130" x2="100" y2="180"/>
+ <line class="mid" x1="0" y1="50" x2="0" y2="122" marker-end="url(#s)"/>
+ <line class="mid" x1="50" y1="50" x2="50" y2="130"/>
+ <line class="mid" x1="100" y1="130" x2="100" y2="58" marker-end="url(#s)"/>
+ <circle class="no" cx="0" cy="0" r="3"/><circle class="no" cx="50" cy="0" r="3"/><circle class="no" cx="100" cy="0" r="3"/>
+ <circle class="no" cx="0" cy="50" r="3"/><circle class="no" cx="50" cy="50" r="3"/><circle class="no" cx="100" cy="50" r="3"/>
+ <circle class="no" cx="0" cy="130" r="3"/><circle class="no" cx="50" cy="130" r="3"/><circle class="no" cx="100" cy="130" r="3"/>
+ <circle class="no" cx="0" cy="180" r="3"/><circle class="no" cx="50" cy="180" r="3"/><circle class="no" cx="100" cy="180" r="3"/>
+ <text class="tx" x="50" y="215" text-anchor="middle">Setas</text>
+ <text class="tb" x="50" y="233" text-anchor="middle">dbu — rota sem volta</text>
+</g>
+</svg>

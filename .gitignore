@@ -1,0 +1,18 @@
+# Ferramentas compiladas
+tools/solver-rodizio
+tools/solver-sorteio
+tools/oraculos
+tools/extrai
+*.o
+
+# Tabelas e estado de convergencia do solver. Grandes (11-42 MB cada) e
+# reproduziveis a partir do C — nao versionar. Os artefatos pequenos, esses
+# sim versionados, ficam em data/.
+tools/*.bin
+
+# Saida do build do site
+node_modules/
+dist/
+public/data/
+
+.DS_Store

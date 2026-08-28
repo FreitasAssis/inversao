@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="440" viewBox="0 0 680 440" role="img">
+<title>Tabuleiro do Inversao — posicao inicial</title>
+<desc>Grade 4x3. Pecas azuis na fileira de cima, laranjas na de baixo. Simbolos vazados marcam os destinos. Setas indicam as colunas de mao unica.</desc>
+<style>
+  .ln{stroke:#73726c;stroke-width:.6;fill:none}
+  .dir{stroke:#3d3d3a;stroke-width:1.6;fill:none}
+  .sk{stroke:#73726c;stroke-width:.9;fill:none;opacity:.55}
+  .az{fill:#378ADD}
+  .lj{fill:#EF9F27}
+  .tx{font-family:system-ui,sans-serif;font-size:12px;fill:#3d3d3a}
+  .tb{font-family:system-ui,sans-serif;font-size:12px;fill:#73726c}
+  @media (prefers-color-scheme:dark){
+    .ln{stroke:#9c9a92}.dir{stroke:#c2c0b6}.sk{stroke:#9c9a92}
+    .tx{fill:#c2c0b6}.tb{fill:#9c9a92}
+  }
+</style>
+<defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+<path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+
+<line class="ln" x1="260" y1="70" x2="460" y2="70"/>
+<line class="ln" x1="260" y1="150" x2="460" y2="150"/>
+<line class="ln" x1="260" y1="290" x2="460" y2="290"/>
+<line class="ln" x1="260" y1="370" x2="460" y2="370"/>
+<line class="ln" x1="260" y1="70" x2="260" y2="150"/>
+<line class="ln" x1="360" y1="70" x2="360" y2="150"/>
+<line class="ln" x1="460" y1="70" x2="460" y2="150"/>
+<line class="ln" x1="260" y1="290" x2="260" y2="370"/>
+<line class="ln" x1="360" y1="290" x2="360" y2="370"/>
+<line class="ln" x1="460" y1="290" x2="460" y2="370"/>
+
+<line class="dir" x1="260" y1="150" x2="260" y2="282" marker-end="url(#a)"/>
+<line class="dir" x1="360" y1="150" x2="360" y2="290"/>
+<line class="dir" x1="460" y1="290" x2="460" y2="158" marker-end="url(#a)"/>
+<circle cx="360" cy="200" r="2.4" fill="#3d3d3a"/>
+<circle cx="360" cy="240" r="2.4" fill="#c2c0b6"/>
+
+<polygon class="sk" points="260,58 273,81 247,81"/>
+<rect class="sk" x="348" y="58" width="24" height="24" rx="3"/>
+<circle class="sk" cx="460" cy="70" r="12"/>
+<circle class="sk" cx="260" cy="370" r="12"/>
+<rect class="sk" x="348" y="358" width="24" height="24" rx="3"/>
+<polygon class="sk" points="460,358 473,381 447,381"/>
+
+<rect class="az" x="249" y="59" width="22" height="22" rx="3"/>
+<polygon class="az" points="360,59 371,80 349,80"/>
+<circle class="az" cx="460" cy="70" r="11"/>
+
+<circle class="lj" cx="260" cy="370" r="11"/>
+<polygon class="lj" points="360,359 371,380 349,380"/>
+<rect class="lj" x="449" y="359" width="22" height="22" rx="3"/>
+
+<text class="tx" x="228" y="66" text-anchor="end">azul</text>
+<text class="tb" x="228" y="82" text-anchor="end">joga para baixo</text>
+<text class="tx" x="228" y="366" text-anchor="end">laranja</text>
+<text class="tb" x="228" y="382" text-anchor="end">joga para cima</text>
+
+<text class="tb" x="500" y="196">col 1 so desce</text>
+<text class="tb" x="500" y="216">col 2 mao dupla</text>
+<text class="tb" x="500" y="236">col 3 so sobe</text>
+
+<text class="tb" x="360" y="420" text-anchor="middle">cor = dono   ·   simbolo = destino   ·   contorno = encaixe de chegada</text>
+</svg>

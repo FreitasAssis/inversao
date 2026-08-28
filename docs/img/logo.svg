@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="240" viewBox="0 0 680 240" role="img">
+<title>Conceitos de logo do Inversao</title>
+<desc>Tres marcas construidas com circulo, triangulo e quadrado: ciclo, troca e totem.</desc>
+<style>
+  .az{fill:#378ADD}.lj{fill:#EF9F27}
+  .ar{stroke:#378ADD;stroke-width:1.5;fill:none;opacity:.55}
+  .tx{font-family:system-ui,sans-serif;font-size:13px;fill:#3d3d3a}
+  .tb{font-family:system-ui,sans-serif;font-size:12px;fill:#73726c}
+  @media (prefers-color-scheme:dark){.tx{fill:#c2c0b6}.tb{fill:#9c9a92}}
+</style>
+<defs><marker id="b" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+<path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+
+<path class="ar" d="M161.2 49.7 A62 62 0 0 1 201.1 118.8" marker-end="url(#b)"/>
+<path class="ar" d="M179.9 155.5 A62 62 0 0 1 100.1 155.5" marker-end="url(#b)"/>
+<path class="ar" d="M78.9 118.8 A62 62 0 0 1 118.8 49.7" marker-end="url(#b)"/>
+<circle class="az" cx="140" cy="66" r="13"/>
+<polygon class="az" points="176,116 189,139 163,139"/>
+<rect class="az" x="91" y="117" width="26" height="26" rx="3"/>
+
+<circle class="az" cx="300" cy="78" r="11"/>
+<polygon class="az" points="340,67 351,87 329,87"/>
+<rect class="az" x="370" y="68" width="20" height="20" rx="3"/>
+<rect class="lj" x="290" y="130" width="20" height="20" rx="3"/>
+<circle class="lj" cx="340" cy="140" r="11"/>
+<polygon class="lj" points="380,129 391,149 369,149"/>
+
+<circle class="az" cx="540" cy="66" r="13"/>
+<polygon class="az" points="540,93 553,116 527,116"/>
+<rect class="az" x="527" y="126" width="26" height="26" rx="3"/>
+
+<text class="tx" x="140" y="200" text-anchor="middle">ciclo</text>
+<text class="tb" x="140" y="218" text-anchor="middle">a mecanica vira a marca</text>
+<text class="tx" x="340" y="200" text-anchor="middle">troca</text>
+<text class="tb" x="340" y="218" text-anchor="middle">inicio e fim lado a lado</text>
+<text class="tx" x="540" y="200" text-anchor="middle">totem</text>
+<text class="tb" x="540" y="218" text-anchor="middle">le como um "I"</text>
+</svg>
