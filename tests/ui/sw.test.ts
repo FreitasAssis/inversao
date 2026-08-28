@@ -69,7 +69,8 @@ const get = (url: string, mode = 'no-cors') => ({ method: 'GET', mode, url })
 describe('the service worker', () => {
   test('answers a navigation with the shell, so any address opens offline', () => {
     // /regras and /analise are the same document as / — the router is in the
-    // page. This is the `_redirects` rule, said again for the offline case.
+    // page. It is the platform's `single-page-application` handling, said
+    // again for the offline case.
     const { strategyFor } = load()
 
     expect(strategyFor(get('https://inversao.example/regras', 'navigate'))).toBe('shell')

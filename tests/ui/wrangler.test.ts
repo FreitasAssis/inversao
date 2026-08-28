@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, test } from 'vitest'
 
 /**
@@ -35,6 +35,21 @@ describe('the deploy configuration', () => {
     // document. Without this a shared link 404s on a direct hit, which is
     // exactly the link somebody would share.
     expect(config.assets.not_found_handling).toBe('single-page-application')
+  })
+
+  test('leaves the redirect rule to the platform, not to a _redirects file', () => {
+    // A `/* /index.html 200` rule and `single-page-application` do the same
+    // job, and having both is not merely redundant — the Workers validator
+    // rejects the file outright:
+    //
+    //   Line 4: Infinite loop detected in this rule. This would cause a
+    //   redirect to strip `.html` or `/index` and end up triggering this rule
+    //   again. [code: 100324]
+    //
+    // It normalises `/index.html` back to `/`, which matches `/*` again. Pages
+    // tolerated it; Workers refuses to deploy. The file was kept "in case the
+    // project goes back to Pages" and that reasoning cost a failed deploy.
+    expect(existsSync('public/_redirects')).toBe(false)
   })
 
   test('ships no server code at all', () => {
