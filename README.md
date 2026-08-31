@@ -75,9 +75,16 @@ a análise provava que o jogo não estava quebrado, não que valesse a pena. Tes
 pessoas, ele se sustenta. As partidas terminaram entre **119 e 164 ações**, e não nos vinte
 lances que fariam o erro ser decisivo cedo demais.
 
-Falta o que está nos passos 8 e 9 da seção 11 do projeto: os **cards compartilháveis** — que
-esperam a paleta definitiva, por serem imagem — e o **multiplayer por código**. A anotação
-pós-jogo, que é o conteúdo do card, já está pronta.
+**E dá para contar.** No fim da partida sai um card: a posição final como grade, a curva de
+probabilidade e o lance exato em que virou. No celular vai como imagem pela folha nativa; no
+desktop, onde a Web Share API quase não existe, o texto vai para a área de transferência.
+
+A curva escondia uma descoberta. Na escala de 0 a 100% ela sai **reta** — o valor passa a
+partida quase inteira entre 40% e 60%, porque P(azul vence) = 0,5 é provado por simetria, e
+seis partidas diferentes davam o mesmo traço. Os oito blocos cobrem a faixa de 30% a 70%, que
+é onde o jogo de fato acontece; fora dela ele já acabou.
+
+Falta o passo 9 da seção 11 do projeto: o **multiplayer por código**.
 
 ## Estrutura
 
@@ -95,7 +102,7 @@ data/     oraculos.json    — fixture de verificação do motor
 ```
 
 ```
-npm install && npm test     # 498 testes
+npm install && npm test     # 572 testes
 npm run dev                 # joga
 npm run build               # site estático em dist/
 ```

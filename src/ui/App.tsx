@@ -3,6 +3,11 @@ import type { CSSProperties } from 'react'
 import { Board, PIECE_PT, telegraphFor } from './Board'
 import type { Telegraph } from './Board'
 import { Annotation } from './Annotation'
+import { ShareButton } from './ShareButton'
+import { shareText, SITE } from './share'
+import { BOARDS_FOR, BOARD_PT, MECHANIC_PT } from './labels'
+import type { CardInput } from './card'
+import { Invite } from './Invite'
 import { Mark } from './Mark'
 import { Evaluation } from './Evaluation'
 import { Outcome } from './Outcome'
@@ -49,6 +54,7 @@ import type { BoardCode, Piece, Side } from '../engine/types'
  * been beaten. Not editable: the opponent is a character, not a field.
  */
 const AI_NAME = 'Inversa'
+
 
 /**
  * Capitalised: with no name typed, the colour stands in as one, and these are
@@ -97,17 +103,6 @@ function Gear() {
   )
 }
 
-const BOARD_LABELS: Record<BoardCode, string> = {
-  nbn: 'Ponte',
-  bbb: 'Grade',
-  dbu: 'Setas',
-}
-
-/** Rodizio only produces a live game on Grade and Setas; on Ponte it draws. */
-const BOARDS_FOR: Record<MatchConfig['mechanic'], readonly BoardCode[]> = {
-  choice: ['nbn', 'bbb', 'dbu'],
-  rotation: ['bbb', 'dbu'],
-}
 
 export type AppProps = Readonly<{
   /** Staging pause on the draw. Zero in tests; a beat in play (spec 4.1). */
@@ -295,6 +290,53 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700 }: AppProps) {
   const annotation =
     match.result !== null && table !== null ? annotate(match, table) : null
 
+  /**
+   * O que sai da partida quando ela acaba (projeto 7).
+   *
+   * O nível só entra contra a Inversa: entre dois humanos ele não significa
+   * nada, e dizer "(Insano)" ao lado do nome de uma pessoa seria atribuir a ela
+   * uma dificuldade que não é dela.
+   *
+   * A curva é lida do lado de quem compartilha, e o `viewpoint` já é isso — ele
+   * é null exatamente quando há duas pessoas na mesma tela, e aí não existe um
+   * "você" para a curva subir junto.
+   */
+  function cardFor(): CardInput | null {
+    if (match.result === null) return null
+    const mine = (blue: number) => (viewpoint === 'orange' ? 1 - blue : blue)
+    const chance = annotation?.moments.every((moment) => moment.assessment.kind === 'chance')
+    const curve =
+      annotation !== null && chance === true
+        ? annotation.moments.map((moment) =>
+            mine(moment.assessment.kind === 'chance' ? moment.assessment.blue : 0.5),
+          )
+        : []
+    return {
+      board: match.config.board,
+      placement: match.placement,
+      title: `${BOARD_PT[match.config.board]} · ${MECHANIC_PT[match.config.mechanic]}`,
+      headline: headlineFor(),
+      curve,
+      turning: curve.length > 0 ? (annotation?.turningPoint?.ply ?? null) : null,
+      caption: captionFor(),
+      url: SITE,
+    }
+  }
+
+  function headlineFor(): string {
+    if (winner === null) return 'Empate'
+    const beaten = displayNames[winner === 'blue' ? 'orange' : 'blue']
+    return `${displayNames[winner]} venceu ${
+      viewpoint === null ? beaten : `${beaten} (${LEVEL_LABELS[level]})`
+    }`
+  }
+
+  function captionFor(): string | null {
+    const turning = annotation?.turningPoint
+    if (turning === undefined || turning === null) return null
+    return `virou no lance ${turning.ply}`
+  }
+
   const offerPending = match.actions.at(-1)?.type === 'offerDraw'
 
   /**
@@ -353,6 +395,26 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700 }: AppProps) {
     return winner === viewpoint ? 'celebration' : 'defeat'
   }
   const tone = toneFor()
+
+  const shareable =
+    match.result === null
+      ? null
+      : {
+          text: shareText({
+            board: match.config.board,
+            mechanic: match.config.mechanic,
+            result: match.result,
+            actions: match.actions.length,
+            placement: match.placement,
+            names: displayNames,
+            level: viewpoint === null ? null : level,
+            annotation,
+            viewpoint: viewpoint ?? 'blue',
+            url: SITE,
+          }),
+          card: cardFor(),
+        }
+
 
   function play(action: Action) {
     setMatch((current) => {
@@ -535,7 +597,7 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700 }: AppProps) {
           <select value={board} onChange={(event) => setBoard(event.target.value as BoardCode)}>
             {BOARDS_FOR[mechanic].map((code) => (
               <option key={code} value={code}>
-                {BOARD_LABELS[code]}
+                {BOARD_PT[code]}
               </option>
             ))}
           </select>
@@ -729,11 +791,29 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700 }: AppProps) {
         <p className="ready">Análise completa disponível</p>
       )}
 
+      {shareable !== null && <ShareButton text={shareable.text} card={shareable.card} />}
+
       {annotation !== null && <Annotation read={annotation} names={displayNames} />}
 
       <a className="seal" href={pathOf('analysis')}>
         verificado por busca exaustiva
       </a>
+
+      {/*
+        Trocar de tabuleiro ou de mecânica já reinicia a partida por si, então o
+        convite não precisa de botão de estado próprio: ele mexe na mesma
+        escolha que o painel mexe.
+      */}
+      {match.result !== null && (
+        <Invite
+          board={board}
+          mechanic={mechanic}
+          onPick={(next, how) => {
+            setBoard(next)
+            setMechanic(how)
+          }}
+        />
+      )}
 
       <button
         type="button"

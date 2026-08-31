@@ -202,3 +202,26 @@ describe('the daily puzzle page', () => {
     expect(screen.getAllByRole('link', { name: /jogar/i })[0]).toHaveAttribute('href', '/')
   })
 })
+
+describe('compartilhando o dia', () => {
+  const day = new Date('2026-08-31T12:00:00Z')
+
+  test('não oferece compartilhar antes de encarar algum', () => {
+    // Um card com os três traços diria "não fiz nada hoje", que não é o que
+    // ninguém quer mandar para alguém.
+    at(day)
+
+    expect(screen.queryByRole('button', { name: /compartilhar/i })).toBeNull()
+  })
+
+  test('oferece assim que o primeiro é respondido', async () => {
+    const user = userEvent.setup()
+    at(day)
+    const [first] = puzzlesFor(day)
+    if (first === undefined) throw new Error('sem desafio no dia')
+
+    await answer(user, first, true)
+
+    expect(screen.getByRole('button', { name: /compartilhar/i })).toBeInTheDocument()
+  })
+})
