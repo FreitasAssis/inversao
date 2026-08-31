@@ -2,6 +2,7 @@ import type { Annotation } from '../engine/annotate'
 import type { Result } from '../engine/match'
 import { PIECES } from '../engine/types'
 import type { BoardCode, Placement, Side } from '../engine/types'
+import { BOARD_PT, MECHANIC_PT } from './labels'
 import { LEVEL_LABELS } from './levels'
 import type { Level } from './levels'
 
@@ -30,8 +31,6 @@ const EMPTY = '·'
  */
 export const SITE = 'inversao.luizfreitas.com.br'
 
-const BOARD_PT: Record<BoardCode, string> = { nbn: 'Ponte', bbb: 'Grade', dbu: 'Setas' }
-const MECHANIC_PT = { choice: 'Escolha Sorteada', rotation: 'Rodízio' } as const
 
 /**
  * A posição como grade 4×3.

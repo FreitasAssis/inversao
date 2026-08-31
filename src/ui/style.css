@@ -859,6 +859,35 @@ p.evaluation strong {
  * is a shape read at a glance, and the sentence underneath carries the numbers.
  */
 /*
+ * O convite para outra combinação. Fica no fim, ao lado de "Nova partida",
+ * porque é a mesma decisão: jogar de novo, e como.
+ */
+.invite {
+  margin-top: var(--space-6);
+  padding-top: var(--space-5);
+  border-top: 1px solid color-mix(in srgb, var(--line) 35%, transparent);
+}
+
+.invite h2 {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  margin: 0 0 var(--space-2);
+}
+
+.invite p {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--line);
+}
+
+.invite-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/*
  * Compartilhar (projeto 7). Chama-se `sharing` porque `share` já é a parcela
  * da barra de avaliação — outra palavra inteiramente, no mesmo arquivo global.
  *

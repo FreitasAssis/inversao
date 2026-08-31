@@ -5,7 +5,9 @@ import type { Telegraph } from './Board'
 import { Annotation } from './Annotation'
 import { ShareButton } from './ShareButton'
 import { shareText, SITE } from './share'
+import { BOARDS_FOR, BOARD_PT, MECHANIC_PT } from './labels'
 import type { CardInput } from './card'
+import { Invite } from './Invite'
 import { Mark } from './Mark'
 import { Evaluation } from './Evaluation'
 import { Outcome } from './Outcome'
@@ -101,17 +103,6 @@ function Gear() {
   )
 }
 
-const BOARD_LABELS: Record<BoardCode, string> = {
-  nbn: 'Ponte',
-  bbb: 'Grade',
-  dbu: 'Setas',
-}
-
-/** Rodizio only produces a live game on Grade and Setas; on Ponte it draws. */
-const BOARDS_FOR: Record<MatchConfig['mechanic'], readonly BoardCode[]> = {
-  choice: ['nbn', 'bbb', 'dbu'],
-  rotation: ['bbb', 'dbu'],
-}
 
 export type AppProps = Readonly<{
   /** Staging pause on the draw. Zero in tests; a beat in play (spec 4.1). */
@@ -323,9 +314,7 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700 }: AppProps) {
     return {
       board: match.config.board,
       placement: match.placement,
-      title: `${BOARD_LABELS[match.config.board]} · ${
-        match.config.mechanic === 'choice' ? 'Escolha Sorteada' : 'Rodízio'
-      }`,
+      title: `${BOARD_PT[match.config.board]} · ${MECHANIC_PT[match.config.mechanic]}`,
       headline: headlineFor(),
       curve,
       turning: curve.length > 0 ? (annotation?.turningPoint?.ply ?? null) : null,
@@ -608,7 +597,7 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700 }: AppProps) {
           <select value={board} onChange={(event) => setBoard(event.target.value as BoardCode)}>
             {BOARDS_FOR[mechanic].map((code) => (
               <option key={code} value={code}>
-                {BOARD_LABELS[code]}
+                {BOARD_PT[code]}
               </option>
             ))}
           </select>
@@ -809,6 +798,22 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700 }: AppProps) {
       <a className="seal" href={pathOf('analysis')}>
         verificado por busca exaustiva
       </a>
+
+      {/*
+        Trocar de tabuleiro ou de mecânica já reinicia a partida por si, então o
+        convite não precisa de botão de estado próprio: ele mexe na mesma
+        escolha que o painel mexe.
+      */}
+      {match.result !== null && (
+        <Invite
+          board={board}
+          mechanic={mechanic}
+          onPick={(next, how) => {
+            setBoard(next)
+            setMechanic(how)
+          }}
+        />
+      )}
 
       <button
         type="button"

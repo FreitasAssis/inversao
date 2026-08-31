@@ -713,3 +713,21 @@ describe('compartilhando a partida', () => {
     expect(await screen.findByRole('button', { name: /compartilhar/i })).toBeInTheDocument()
   })
 })
+
+describe('o convite para outra combinação', () => {
+  test('não aparece com a partida em andamento', () => {
+    // Antes do fim seria interrupção: a pessoa está no meio de uma decisão.
+    render(<App drawDelayMs={0} seed={2} telegraphMs={0} />)
+
+    expect(screen.queryByRole('heading', { name: /experimente outra/i })).toBeNull()
+  })
+
+  test('aparece quando a partida acaba', async () => {
+    render(<App drawDelayMs={0} seed={2} telegraphMs={0} />)
+
+    await screen.findByRole('button', { name: /desistir/i })
+    await userEvent.setup().click(screen.getByRole('button', { name: /desistir/i }))
+
+    expect(await screen.findByRole('heading', { name: /experimente outra/i })).toBeInTheDocument()
+  })
+})
