@@ -66,14 +66,31 @@ export type Player = { play(cue: Cue): void }
  * building it early buys nothing and a suspended context is a silent one.
  *
  * That suspension is also why sound on by default is safe here. The first cue
- * anyone hears is a reply to their own click — the draw and the AI's opening
- * move happen before any gesture, and the browser drops them for us.
+ * anyone hears is a reply to their own action — the draw and the AI's opening
+ * move happen before any gesture, and they are dropped.
+ *
+ * **Dropped here, not by the browser.** This used to lean on the browser
+ * refusing, which it does — and then writes a paragraph about the autoplay
+ * policy to the console, three times, on every first load. Waiting for the
+ * gesture ourselves is the same behaviour without the noise, and it is what the
+ * paragraph above always claimed was happening.
  */
 export function createPlayer(volumeOf: () => number): Player {
   let context: AudioContext | null = null
+  let touched = false
+
+  // Pointer and keyboard both: the board is fully playable from the keyboard,
+  // so somebody can reach their first move without ever pointing at anything.
+  const wake = () => {
+    touched = true
+  }
+  for (const gesture of ['pointerdown', 'keydown']) {
+    globalThis.addEventListener?.(gesture, wake, { once: true, passive: true })
+  }
 
   return {
     play(cue: Cue) {
+      if (!touched) return
       const volume = volumeOf()
       if (volume <= 0) return
 

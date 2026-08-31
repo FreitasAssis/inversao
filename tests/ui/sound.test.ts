@@ -1,5 +1,5 @@
-import { describe, expect, test } from 'vitest'
-import { CUES } from '../../src/ui/sound'
+import { afterEach, describe, expect, test, vi } from 'vitest'
+import { CUES, createPlayer } from '../../src/ui/sound'
 import type { Cue } from '../../src/ui/sound'
 
 const cues = Object.keys(CUES) as Cue[]
@@ -53,5 +53,64 @@ describe('sound cues', () => {
     const tie = CUES.tie.map((tone) => tone.frequency)
 
     expect(new Set(tie).size).toBe(1)
+  })
+})
+
+/** Enough of the Web Audio API to see whether it was reached for at all. */
+function fakeAudio() {
+  const node = () => ({
+    connect: () => node(),
+    start: () => {},
+    stop: () => {},
+    frequency: { value: 0 },
+    gain: { setValueAtTime: () => {}, linearRampToValueAtTime: () => {} },
+    type: '',
+  })
+  const made = vi.fn(function AudioContext(this: Record<string, unknown>) {
+    this.state = 'running'
+    this.currentTime = 0
+    this.destination = node()
+    this.createOscillator = node
+    this.createGain = node
+    this.resume = () => {}
+  })
+  vi.stubGlobal('AudioContext', made)
+  return made
+}
+
+describe('when the sound is allowed to start', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  test('does not reach for the audio device before the player has touched anything', () => {
+    // The draw and the AI's opening move happen on their own, before any
+    // gesture. Browsers refuse to start audio there — correctly — and say so in
+    // the console, three times, on every first load.
+    //
+    // The file already argued that those cues should be dropped. It was leaving
+    // the dropping to the browser, which does it loudly; this does it here.
+    const made = fakeAudio()
+    createPlayer(() => 0.5).play('draw')
+
+    expect(made).not.toHaveBeenCalled()
+  })
+
+  test('plays once a gesture has happened', () => {
+    const made = fakeAudio()
+    const player = createPlayer(() => 0.5)
+
+    window.dispatchEvent(new Event('pointerdown'))
+    player.play('land')
+
+    expect(made).toHaveBeenCalled()
+  })
+
+  test('counts the keyboard as a gesture, since the board is playable by it', () => {
+    const made = fakeAudio()
+    const player = createPlayer(() => 0.5)
+
+    window.dispatchEvent(new Event('keydown'))
+    player.play('land')
+
+    expect(made).toHaveBeenCalled()
   })
 })
