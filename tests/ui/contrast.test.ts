@@ -93,3 +93,54 @@ describe('what contrast cannot fix', () => {
     expect(css).toMatch(/\.share\s*\{[^}]*border-right/)
   })
 })
+
+/**
+ * Os contornos vazados, conferidos pela fórmula que os gera.
+ *
+ * Deslocar um polígono para dentro por uma distância uniforme move cada vértice
+ * pela **bissetriz**, por `d / sen(meio-ângulo)` — e o ápice é o canto mais
+ * fechado que um triângulo tem, então anda muito mais que a base.
+ *
+ * Já errei isso duas vezes escrevendo o polígono à mão: uma no encaixe e outra
+ * na peça, as duas com o contorno afinando no topo. É aritmética, e aritmética
+ * se confere.
+ */
+describe('os triângulos vazados', () => {
+  /** Falha alto se a variável sumiu, em vez de comparar contra NaN em silêncio. */
+  function declared(pattern: RegExp, name: string): string {
+    const found = css.match(pattern)?.[1]
+    if (found === undefined) throw new Error(`--${name} não está no stylesheet`)
+    return found
+  }
+
+  const percent = (name: string): number =>
+    Number(declared(new RegExp(`--${name}:\\s*([\\d.]+)%`), name))
+
+  const polygon = (name: string): number[] =>
+    [
+      ...declared(new RegExp(`--${name}:\\s*polygon\\(([^)]+)\\)`), name).matchAll(
+        /([\d.]+)%/g,
+      ),
+    ].map((match) => Number(match[1]))
+
+  test.each([
+    ['peça', 'hollow', 'hollow-triangle'],
+    ['encaixe', 'hollow-slot', 'hollow-slot-triangle'],
+  ])('o do %s desloca cada vértice pela bissetriz', (_what, widthName, polygonName) => {
+    const d = percent(widthName)
+    const [apexX, apexY, rightX, rightY, leftX, leftY] = polygon(polygonName)
+
+    // O ápice desce 2,236d; as duas bases sobem d; os lados entram 1,618d.
+    expect(apexY as number).toBeCloseTo(2.236 * d, 0)
+    expect(rightY as number).toBeCloseTo(100 - d, 0)
+    expect(leftY as number).toBeCloseTo(100 - d, 0)
+    expect(leftX as number).toBeCloseTo(1.618 * d, 0)
+    expect(rightX as number).toBeCloseTo(100 - 1.618 * d, 0)
+    // E o ápice fica no meio, senão o triângulo sai torto.
+    expect(apexX as number).toBe(50)
+  })
+
+  test('o encaixe é mais fino que a peça, porque é informação de fundo', () => {
+    expect(percent('hollow-slot')).toBeLessThan(percent('hollow'))
+  })
+})

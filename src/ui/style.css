@@ -83,6 +83,17 @@
    */
   --hollow: 11%;
   --hollow-triangle: polygon(50% 24.6%, 82.2% 89%, 17.8% 89%);
+
+  /*
+   * O mesmo para os encaixes vazios, mais fino: eles são informação de fundo,
+   * não peça. Derivado pela mesma fórmula — d = 7.
+   */
+  --hollow-slot: 7%;
+  --hollow-slot-triangle: polygon(50% 15.7%, 88.7% 93%, 11.3% 93%);
+
+  /* O canto do quadrado, em fração do glifo, para acompanhar o tamanho da
+     casa em vez de endurecer conforme o tabuleiro cresce. */
+  --piece-radius: 12%;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -426,6 +437,15 @@ h1 {
   border-radius: 50%;
 }
 
+/*
+ * O quadrado tinha canto vivo dentro de uma casa arredondada, ao lado de uma
+ * marca cujo quadrado tem raio. Era a única forma do jogo que não acompanhava
+ * o resto.
+ */
+.cell[data-piece='square'] .glyph {
+  border-radius: var(--piece-radius);
+}
+
 .cell[data-piece='triangle'] .glyph {
   clip-path: polygon(50% 0, 100% 100%, 0 100%);
 }
@@ -455,13 +475,38 @@ h1 {
   --slot: var(--orange);
 }
 
+/*
+ * Uma técnica só para as três formas, como as peças.
+ *
+ * Eram duas — `border` no círculo e no quadrado, recortes aninhados no
+ * triângulo —, com espessuras que não batiam. Ficou assim porque o tracejado
+ * que carregava o dono no modo sem cor não existe em `clip-path`.
+ *
+ * A saída não foi insistir no tracejado: no modo sem cor os encaixes passam a
+ * usar a mesma linguagem que as peças já usam ali — cheio contra vazado —, que
+ * funciona com recorte e é o vocabulário que o jogador já aprendeu.
+ */
 .cell[data-slot]:not([data-piece]) .glyph {
-  border: 1.5px solid var(--slot, var(--line));
+  position: relative;
+  background: var(--slot, var(--line));
   opacity: 0.75;
 }
 
-.cell[data-slot='circle']:not([data-piece]) .glyph {
+.cell[data-slot]:not([data-piece]) .glyph::after {
+  content: '';
+  position: absolute;
+  inset: var(--hollow-slot);
+  background: var(--paper);
+}
+
+.cell[data-slot='circle']:not([data-piece]) .glyph,
+.cell[data-slot='circle']:not([data-piece]) .glyph::after {
   border-radius: 50%;
+}
+
+.cell[data-slot='square']:not([data-piece]) .glyph,
+.cell[data-slot='square']:not([data-piece]) .glyph::after {
+  border-radius: var(--piece-radius);
 }
 
 /*
@@ -472,30 +517,32 @@ h1 {
  * back out of the middle.
  */
 .cell[data-slot='triangle']:not([data-piece]) .glyph {
-  position: relative;
   clip-path: polygon(50% 0, 100% 100%, 0 100%);
-  background: var(--slot, var(--line));
-  border: none;
 }
 
+/* Não `inset`: deslocar um polígono para dentro move cada vértice pela
+   bissetriz, e o ápice é o canto mais fechado que um triângulo tem. */
 .cell[data-slot='triangle']:not([data-piece]) .glyph::after {
-  content: '';
-  position: absolute;
   inset: 0;
-  background: var(--paper);
-  clip-path: polygon(50% 13%, 87% 91%, 13% 91%);
+  clip-path: var(--hollow-slot-triangle);
 }
 
 /*
  * Colourless: the outline style carries the owner, since the hue cannot. Same
  * split the pieces use — one side plain, the other marked.
  */
+/*
+ * Sem cor, o dono do encaixe passa a ser cheio contra vazado — a mesma
+ * distinção que as peças já usam aqui, e que o jogador portanto já leu uma vez.
+ * O tracejado que fazia esse papel não sobrevive a um `clip-path`, e era o que
+ * mantinha os encaixes em duas técnicas.
+ */
 .app[data-colourless] .cell[data-slot-side] {
-  --slot: var(--line);
+  --slot: var(--ink);
 }
 
-.app[data-colourless] .cell[data-slot-side='orange']:not([data-piece]) .glyph {
-  border-style: dashed;
+.app[data-colourless] .cell[data-slot-side='blue']:not([data-piece]) .glyph::after {
+  display: none;
 }
 
 /*
