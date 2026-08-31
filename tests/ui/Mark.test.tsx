@@ -80,7 +80,7 @@ describe('the cycle mark', () => {
       .map((node) => node.getAttribute('fill'))
       .filter((fill) => fill !== 'none')
 
-    expect(new Set(fills)).toEqual(new Set(['#ef9f27']))
+    expect(new Set(fills)).toEqual(new Set(['var(--orange)']))
   })
 
   test('keeps quiet when the written name is right there', () => {
@@ -101,7 +101,7 @@ describe('the cycle mark', () => {
     const svg = screen.getByRole('img')
 
     expect(svg.querySelector('.mark-ring')).toHaveAttribute('fill', 'none')
-    expect(svg.querySelector('.mark-shapes')).toHaveAttribute('fill', '#378add')
+    expect(svg.querySelector('.mark-shapes')).toHaveAttribute('fill', 'var(--blue)')
   })
 
   test('can be flipped, so the name beside it takes the other colour', () => {

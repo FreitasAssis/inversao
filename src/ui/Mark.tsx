@@ -27,7 +27,16 @@ export type MarkProps = Readonly<{
   decorative?: boolean
 }>
 
-const HUE = { blue: '#378add', orange: '#ef9f27' } as const
+/*
+ * As variáveis, não os valores. As cores das peças mudam com o esquema — o azul
+ * do tema claro não é o do escuro — e a marca fica ao lado do tabuleiro: fixá-la
+ * deixaria o logo numa cor e as peças noutra, na mesma tela.
+ *
+ * Os ícones do app continuam com os valores originais, e é a linha certa: eles
+ * são arquivo, não podem seguir o esquema de ninguém, e nunca aparecem ao lado
+ * de uma peça.
+ */
+const HUE = { blue: 'var(--blue)', orange: 'var(--orange)' } as const
 
 const BOX = 140
 const MIDDLE = BOX / 2
