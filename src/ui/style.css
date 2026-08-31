@@ -63,6 +63,16 @@
    */
   --cell-gap: var(--space-2);
 
+  /*
+   * Quanto da casa a peça ocupa. Está aqui pelo mesmo motivo que o vão: a
+   * animação precisa dele para converter a distância percorrida.
+   *
+   * Porcentagem em `translate` resolve contra a caixa do **próprio** elemento, e
+   * quem desliza é a peça, não a casa. Então `100%` ali são 58% de uma casa, e o
+   * deslize precisa dividir por este número para andar uma casa inteira.
+   */
+  --glyph: 0.58;
+
   /* Corners, for the same reason they were needed above: they were 0,25 and
      0,4 with nothing saying which was meant where. */
   --radius: var(--space-2);
@@ -432,8 +442,8 @@ h1 {
 @keyframes slide-in {
   from {
     transform: translate(
-      calc(var(--dx, 0) * (100% + var(--cell-gap))),
-      calc(var(--dy, 0) * (100% + var(--cell-gap)))
+      calc(var(--dx, 0) * (100% / var(--glyph) + var(--cell-gap))),
+      calc(var(--dy, 0) * (100% / var(--glyph) + var(--cell-gap)))
     );
   }
   to {
@@ -461,8 +471,8 @@ h1 {
  * porque o que tem espessura é a peça, não a casa.
  */
 .glyph {
-  width: 58%;
-  height: 58%;
+  width: calc(var(--glyph) * 100%);
+  height: calc(var(--glyph) * 100%);
   filter: var(--lift);
 }
 

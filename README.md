@@ -95,7 +95,7 @@ data/     oraculos.json    — fixture de verificação do motor
 ```
 
 ```
-npm install && npm test     # 488 testes
+npm install && npm test     # 489 testes
 npm run dev                 # joga
 npm run build               # site estático em dist/
 ```

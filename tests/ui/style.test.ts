@@ -88,4 +88,26 @@ describe('the stylesheet', () => {
     expect(slide).toContain('var(--cell-gap)')
     expect(slide.slice(0, slide.indexOf('}')).match(/\d+rem/)).toBeNull()
   })
+
+  test('desliza uma casa inteira, e não uma peça inteira', () => {
+    // Porcentagem em `translate` resolve contra a caixa do próprio elemento, e
+    // quem desliza é a peça — que tem 58% da casa. Então `100%` ali eram 0,58
+    // casa, e um lance de uma casa cobria pouco mais da metade do caminho,
+    // começando já dentro da casa vizinha.
+    //
+    // Passou despercebido por anos de olhar porque 0,18s de deslize curto ainda
+    // lê como deslize. Nenhum teste de string pegaria: a conta é que estava
+    // errada, não a grafia. Então esta faz a conta.
+    const fraction = Number((css.match(/--glyph:\s*([\d.]+)/) as RegExpMatchArray)[1])
+    const slide = css.slice(css.indexOf('@keyframes slide-in'))
+    const basis = (slide.match(/var\(--dx, 0\) \* \(([^+]+)\+/) as RegExpMatchArray)[1] as string
+
+    // Avaliada em unidades de casa: `100%` é a peça, logo `fraction` de casa.
+    const travel = Function(
+      `const glyph = ${fraction};
+       return ${basis.replace(/var\(--glyph\)/g, 'glyph').replace(/100%/g, 'glyph')}`,
+    )() as number
+
+    expect(travel).toBeCloseTo(1, 10)
+  })
 })
