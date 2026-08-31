@@ -80,8 +80,36 @@ function stepFocus(from: Cell, key: string): Cell | null {
   return (nextRow * COLUMNS + nextColumn) as Cell
 }
 
-/** A move announced but not yet played, so the player can see it coming. */
-export type Telegraph = { from: Cell; to: Cell }
+/**
+ * Um lance anunciado e ainda não jogado, para o jogador vê-lo chegar.
+ *
+ * `to: null` é um **passe**, e ele existe aqui pelo motivo mais importante: um
+ * passe não move nada. Sem anúncio ele acontece em silêncio absoluto, e quem
+ * está do outro lado recebe a vez presa a um símbolo que nunca viu ninguém
+ * escolher. Na Escolha Sorteada isso não é detalhe — nomear uma peça sem lance é
+ * justamente a jogada forte, e era a única que a tela não contava.
+ *
+ * A peça vem junto porque num passe ela é a informação inteira: não há destino
+ * para o jogador ler, e a casa de origem sozinha não diz qual símbolo foi
+ * nomeado a quem está aprendendo o jogo.
+ */
+export type Telegraph = { from: Cell; to: Cell | null; piece: Piece }
+
+/**
+ * O que anunciar antes de aplicar uma ação, ou null para aplicar direto.
+ *
+ * Está aqui fora, e não na condição dentro do efeito onde nasceu, porque foi
+ * exatamente ali que o passe ficou de fora por um ano: `action.type !== 'move'`
+ * mandava passe, sorteio, oferta e desistência todos pelo mesmo caminho mudo.
+ * Como função, a regra tem como ser conferida uma ação de cada vez.
+ *
+ * Um sorteio não passa por aqui: ele tem a moeda e a sua própria espera.
+ */
+export function telegraphFor(match: Match, action: Action, mover: Side): Telegraph | null {
+  if (action.type !== 'move' && action.type !== 'pass') return null
+  const from = match.placement[mover][PIECES.indexOf(action.piece)] as Cell
+  return { from, to: action.type === 'move' ? action.to : null, piece: action.piece }
+}
 
 export type BoardProps = Readonly<{
   match: Match
@@ -140,11 +168,22 @@ export function Board({
   }
 
   function announce(): string {
-    if (telegraph) {
-      return `Lance anunciado: ${CELL_NAMES[telegraph.from]} para ${CELL_NAMES[telegraph.to]}.`
-    }
+    // A checagem do sorteio vem antes do telegrama, e não depois: um telegrama
+    // só existe com alguém para jogá-lo, então esta ordem dá o nome de graça.
     if (view.mover === null) return 'Sorteando a iniciativa…'
     const who = naming(view.mover)
+    if (telegraph) {
+      if (telegraph.to !== null) {
+        return `Lance anunciado: ${CELL_NAMES[telegraph.from]} para ${CELL_NAMES[telegraph.to]}.`
+      }
+      // Um passe não move nada, então o texto é a única coisa que acontece.
+      // As duas frases são situações diferentes: quem nomeia está escolhendo o
+      // símbolo que vai obrigar o adversário, e quem responde está obedecendo.
+      const passing = PIECE_PT[telegraph.piece]
+      return namer !== null
+        ? `${who} nomeia o ${passing}, que não tem lance: você joga o ${passing}.`
+        : `${who} passa: o ${passing} não tem lance legal.`
+    }
     if (namer !== null && named === null) return `Iniciativa: ${who}. Escolha uma peça.`
     const piece = PIECE_PT[active?.piece ?? 'circle']
     if (stuck) return `${who} passa: o ${piece} não tem lance legal.`
