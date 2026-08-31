@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { curveText, positionText, shareText } from '../../src/ui/share'
+import { curveText, positionText, puzzleShareText, shareText } from '../../src/ui/share'
 import type { ShareMatch } from '../../src/ui/share'
 import { INITIAL, TARGETS } from '../../src/engine/board'
 import type { Annotation, Moment } from '../../src/engine/annotate'
@@ -213,5 +213,70 @@ describe('o texto compartilhado, com a tabela na mão', () => {
     const clean: Annotation = { moments: [chance(0, 0.5), chance(1, 0.5)], turningPoint: null }
 
     expect(shareText({ ...base, annotation: clean })).not.toContain('virou')
+  })
+})
+
+describe('o card dos desafios do dia', () => {
+  const day = {
+    date: '31 de agosto de 2026',
+    answers: { nbn: true, bbb: false },
+    streaks: { attempted: 7, perfect: 3 },
+    url: 'inversao.luizfreitas.com.br',
+  }
+
+  test('mostra os três tabuleiros, inclusive o que não foi tentado', () => {
+    // Esconder o não tentado transformaria "não fiz" em "não existe", e são
+    // três por dia justamente para mostrar as três topologias.
+    const text = puzzleShareText(day)
+
+    expect(text).toContain('Ponte ✔')
+    expect(text).toContain('Grade ✘')
+    expect(text).toContain('Setas —')
+  })
+
+  test('não distingue certo de errado só pela cor', () => {
+    // A convenção do Wordle é verde contra vermelho, e aqui não serve: seria a
+    // única informação do card carregada só pela cor, num projeto que mantém um
+    // modo sem cor e mede contraste por teste.
+    expect(puzzleShareText(day)).not.toMatch(/🟩|🟥|🟧|🟦|⬛|⬜/u)
+  })
+
+  test('não entrega a resposta', () => {
+    // O laço do recurso é quem recebe abrir e encarar os mesmos três. Um card
+    // que diga o lance destrói exatamente isso.
+    const text = puzzleShareText(day)
+
+    expect(text).not.toMatch(/[ABCD][123]/)
+    expect(text).not.toMatch(/círculo|triângulo|quadrado/i)
+  })
+
+  test('leva a data, senão dois dias diferentes compartilham igual', () => {
+    expect(puzzleShareText(day)).toContain('31 de agosto de 2026')
+  })
+
+  test('conta as duas sequências', () => {
+    expect(puzzleShareText(day)).toContain('7 dias seguidos, 3 perfeitos')
+  })
+
+  test('fala no singular quando é um dia só', () => {
+    const text = puzzleShareText({ ...day, streaks: { attempted: 1, perfect: 1 } })
+
+    expect(text).toContain('1 dia seguido, 1 perfeito')
+  })
+
+  test('cala a sequência perfeita quando ela é zero', () => {
+    const text = puzzleShareText({ ...day, streaks: { attempted: 4, perfect: 0 } })
+
+    expect(text).toContain('4 dias seguidos')
+    expect(text).not.toContain('perfeito')
+  })
+
+  test('não anuncia zero dia seguido no primeiro dia', () => {
+    // É o dia em que a pessoa mais precisa de um motivo para voltar amanhã, e
+    // "0 dias seguidos" é pior do que linha nenhuma.
+    const text = puzzleShareText({ ...day, streaks: { attempted: 0, perfect: 0 } })
+
+    expect(text).not.toContain('0 dias')
+    expect(text).toContain('Ponte ✔')
   })
 })

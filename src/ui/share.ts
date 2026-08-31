@@ -23,6 +23,13 @@ const FILLED = ['●', '▲', '■'] as const
 const HOLLOW = ['○', '△', '□'] as const
 const EMPTY = '·'
 
+/**
+ * O endereço, e o motivo do card existir. Uma constante só: dois arquivos com a
+ * mesma string sairiam de sincronia no dia em que o domínio mudasse, e o card
+ * antigo continuaria mandando gente para lugar nenhum.
+ */
+export const SITE = 'inversao.luizfreitas.com.br'
+
 const BOARD_PT: Record<BoardCode, string> = { nbn: 'Ponte', bbb: 'Grade', dbu: 'Setas' }
 const MECHANIC_PT = { choice: 'Escolha Sorteada', rotation: 'Rodízio' } as const
 
@@ -182,3 +189,53 @@ function turningText(match: ShareMatch): string | null {
 }
 
 const percent = (value: number) => `${(value * 100).toFixed(0)}%`
+
+/**
+ * O card dos desafios do dia (projeto 8.4).
+ *
+ * **Sem spoiler**: diz o que aconteceu, nunca qual era o lance. Quem recebe
+ * abre e encara os mesmos três, que é o laço inteiro do recurso.
+ *
+ * E sem cor. A convenção do Wordle é quadrado verde contra vermelho, e aqui ela
+ * não serve: seria a única informação do card, carregada só pela cor, num
+ * projeto que mantém um modo sem cor e mede contraste por teste. Certo, errado
+ * e não tentado precisam se distinguir em preto e branco.
+ */
+const VERDICT = { right: '✔', wrong: '✘', absent: '—' } as const
+
+export type PuzzleShare = {
+  /** Já escrita por extenso — quem formata é quem já mostra a data na tela. */
+  date: string
+  answers: Partial<Record<BoardCode, boolean>>
+  streaks: { attempted: number; perfect: number }
+  url: string
+}
+
+export function puzzleShareText(share: PuzzleShare): string {
+  const line = (['nbn', 'bbb', 'dbu'] as const)
+    .map((board) => {
+      const answer = share.answers[board]
+      const mark = answer === undefined ? VERDICT.absent : answer ? VERDICT.right : VERDICT.wrong
+      return `${BOARD_PT[board]} ${mark}`
+    })
+    .join(' · ')
+
+  const parts = [`Inversão · desafios de ${share.date}`, line]
+  const streak = streakLine(share.streaks)
+  if (streak !== null) parts.push('', streak)
+  parts.push('', share.url)
+  return parts.join('\n')
+}
+
+/**
+ * Null no primeiro dia. Um card anunciando "0 dias seguidos" é pior do que um
+ * card sem linha nenhuma — e é exatamente o dia em que a pessoa mais precisa de
+ * um motivo para voltar amanhã.
+ */
+function streakLine(streaks: { attempted: number; perfect: number }): string | null {
+  if (streaks.attempted === 0) return null
+  const days = streaks.attempted === 1 ? '1 dia seguido' : `${streaks.attempted} dias seguidos`
+  if (streaks.perfect === 0) return days
+  const perfect = streaks.perfect === 1 ? '1 perfeito' : `${streaks.perfect} perfeitos`
+  return `${days}, ${perfect}`
+}

@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { ShareButton } from './ShareButton'
+import { puzzleShareText, SITE } from './share'
 import { Board, CELL_NAMES, PIECE_PT } from './Board'
 import { pathOf } from './routes'
 import {
@@ -57,6 +59,7 @@ export type PuzzleProps = Readonly<{
   now?: Date
 }>
 
+
 export function Puzzle({ now = new Date() }: PuzzleProps) {
   const today = dayKey(now)
   const [record, setRecord] = useState(() => readPuzzleRecord())
@@ -106,6 +109,22 @@ export function Puzzle({ now = new Date() }: PuzzleProps) {
           }
         />
       ))}
+
+      {/*
+        Só depois de encarar algum. Um card com os três traços diria "não fiz
+        nada hoje", que não é o que ninguém quer mandar para alguém.
+      */}
+      {Object.keys(answers).length > 0 && (
+        <ShareButton
+          text={puzzleShareText({
+            date: longDate(now),
+            answers,
+            streaks,
+            url: SITE,
+          })}
+          card={null}
+        />
+      )}
 
       <a className="restart" href={pathOf('game')}>
         Voltar e jogar

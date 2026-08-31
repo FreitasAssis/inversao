@@ -4,7 +4,7 @@ import { Board, PIECE_PT, telegraphFor } from './Board'
 import type { Telegraph } from './Board'
 import { Annotation } from './Annotation'
 import { ShareButton } from './ShareButton'
-import { shareText } from './share'
+import { shareText, SITE } from './share'
 import type { CardInput } from './card'
 import { Mark } from './Mark'
 import { Evaluation } from './Evaluation'
@@ -53,8 +53,6 @@ import type { BoardCode, Piece, Side } from '../engine/types'
  */
 const AI_NAME = 'Inversa'
 
-/** O endereço, no card e em nenhum outro lugar — é o que o card serve para dizer. */
-const SITE = 'inversao.luizfreitas.com.br'
 
 /**
  * Capitalised: with no name typed, the colour stands in as one, and these are
