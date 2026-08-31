@@ -3,6 +3,8 @@
 Um jogo de tabuleiro abstrato para dois jogadores, **resolvido por busca exaustiva antes de
 existir como jogo**.
 
+**Jogue em <https://inversao.luizfreitas.com.br>**
+
 Cada jogador tem três peças — círculo, triângulo e quadrado — que precisam atravessar um
 tabuleiro de doze casas e chegar ao encaixe do seu símbolo do outro lado. Nenhuma peça termina
 na coluna em que começou. Não há captura, não há salto.
