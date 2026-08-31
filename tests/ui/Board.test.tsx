@@ -1,10 +1,12 @@
 import { describe, expect, test } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { Board } from '../../src/ui/Board'
+import { Board, telegraphFor } from '../../src/ui/Board'
 import { applyAction, startMatch } from '../../src/engine/match'
 import type { Match } from '../../src/engine/match'
-import type { Placement } from '../../src/engine/types'
+import { legalMoves } from '../../src/engine/moves'
+import { PIECES } from '../../src/engine/types'
+import type { Cell, Piece, Placement, Side } from '../../src/engine/types'
 
 const rodizio = () => startMatch({ board: 'dbu', mechanic: 'rotation' })
 
@@ -213,7 +215,7 @@ describe('showing a move happen', () => {
   test('marks the piece about to move and where it is going', () => {
     // The AI announces first and plays after. Without that the position simply
     // changes and the player never sees what happened.
-    render(<Board match={rodizio()} onPlay={() => {}} telegraph={{ from: 0, to: 3 }} />)
+    render(<Board match={rodizio()} onPlay={() => {}} telegraph={{ from: 0, to: 3, piece: 'square' }} />)
 
     expect(screen.getByRole('gridcell', { name: /A1/ })).toHaveAttribute('data-telegraph', 'from')
     expect(screen.getByRole('gridcell', { name: /B1/ })).toHaveAttribute('data-telegraph', 'to')
@@ -226,7 +228,7 @@ describe('showing a move happen', () => {
   })
 
   test('says the announced move out loud', () => {
-    render(<Board match={rodizio()} onPlay={() => {}} telegraph={{ from: 0, to: 3 }} />)
+    render(<Board match={rodizio()} onPlay={() => {}} telegraph={{ from: 0, to: 3, piece: 'square' }} />)
 
     expect(screen.getByRole('status')).toHaveTextContent(/A1.*B1/i)
   })
@@ -372,5 +374,116 @@ describe('empty landing slots', () => {
 
     expect(sides.filter((side) => side === 'blue')).toHaveLength(3)
     expect(sides.filter((side) => side === 'orange')).toHaveLength(3)
+  })
+})
+
+/**
+ * O passe, que era a única jogada que a tela não contava.
+ *
+ * Na Escolha Sorteada, nomear uma peça sem lance legal é a jogada forte: você
+ * passa de propósito para obrigar o adversário àquele símbolo. Ela não move
+ * nada, então sem anúncio acontece em silêncio absoluto — e a vez volta presa a
+ * um símbolo que o jogador nunca viu ninguém escolher.
+ *
+ * Foi assim por um ano. `action.type !== 'move'` mandava passe, sorteio, oferta
+ * e desistência todos pelo mesmo caminho mudo, e nenhum teste reparou porque
+ * todos perguntavam o que a tela mostra, e o defeito era o que ela não mostra.
+ */
+describe('anunciando um passe', () => {
+  const sorteio = (initiative: Side = 'orange') => {
+    const drawn = applyAction(startMatch({ board: 'dbu', mechanic: 'choice' }), {
+      type: 'draw',
+      initiative,
+    })
+    if (!drawn.ok) throw new Error(drawn.reason)
+    return drawn.match
+  }
+
+  const cellOf = (match: Match, side: Side, piece: Piece) =>
+    match.placement[side][PIECES.indexOf(piece)] as Cell
+
+  test('diz qual peça foi nomeada quando quem tem a iniciativa passa', () => {
+    // O jogador precisa saber a qual símbolo está sendo obrigado, e a origem
+    // sozinha não diz isso a quem ainda está aprendendo o jogo.
+    const match = sorteio('orange')
+
+    render(
+      <Board
+        match={match}
+        onPlay={() => {}}
+        telegraph={{ from: cellOf(match, 'orange', 'circle'), to: null, piece: 'circle' }}
+      />,
+    )
+
+    expect(screen.getByRole('status')).toHaveTextContent(/nomeia/i)
+    expect(screen.getByRole('status')).toHaveTextContent(/círculo/i)
+  })
+
+  test('diz que o adversário passou quando ele estava obrigado', () => {
+    const drawn = sorteio('blue')
+    // O destino vem das regras, e não de um número escolhido a dedo: o
+    // tabuleiro muda e um literal aqui vira 'illegal destination' silencioso.
+    const to = legalMoves('dbu', drawn.placement, 'blue', 'circle')[0] as Cell
+    const named = applyAction(drawn, { type: 'move', piece: 'circle', to })
+    if (!named.ok) throw new Error(named.reason)
+
+    render(
+      <Board
+        match={named.match}
+        onPlay={() => {}}
+        telegraph={{ from: cellOf(named.match, 'orange', 'circle'), to: null, piece: 'circle' }}
+      />,
+    )
+
+    expect(screen.getByRole('status')).toHaveTextContent(/passa/i)
+    expect(screen.getByRole('status')).toHaveTextContent(/círculo/i)
+  })
+
+  test('marca a peça nomeada e nenhum destino, porque não há destino', () => {
+    const match = sorteio('orange')
+    const from = cellOf(match, 'orange', 'circle')
+
+    const { container } = render(
+      <Board match={match} onPlay={() => {}} telegraph={{ from, to: null, piece: 'circle' }} />,
+    )
+
+    expect(container.querySelectorAll('[data-telegraph="from"]')).toHaveLength(1)
+    expect(container.querySelectorAll('[data-telegraph="to"]')).toHaveLength(0)
+  })
+})
+
+describe('telegraphFor', () => {
+  // A regra vive fora do efeito onde nasceu justamente para caber num teste:
+  // dentro dele só dava para exercitá-la achando uma partida em que a IA passa.
+  const match = startMatch({ board: 'dbu', mechanic: 'choice' })
+
+  test('anuncia um lance com origem e destino', () => {
+    const from = match.placement.blue[PIECES.indexOf('square')] as Cell
+
+    expect(telegraphFor(match, { type: 'move', piece: 'square', to: 4 }, 'blue')).toEqual({
+      from,
+      to: 4,
+      piece: 'square',
+    })
+  })
+
+  test('anuncia um passe, com a peça e sem destino', () => {
+    const from = match.placement.blue[PIECES.indexOf('circle')] as Cell
+
+    expect(telegraphFor(match, { type: 'pass', piece: 'circle' }, 'blue')).toEqual({
+      from,
+      to: null,
+      piece: 'circle',
+    })
+  })
+
+  test.each([
+    ['draw', { type: 'draw', initiative: 'blue' }],
+    ['offerDraw', { type: 'offerDraw' }],
+    ['resign', { type: 'resign' }],
+  ] as const)('não anuncia %s, que não é uma peça se mexendo', (_name, action) => {
+    // O sorteio tem a moeda e a sua própria espera; os outros dois não são
+    // lances. Anunciá-los seria marcar uma casa que não tem nada a ver.
+    expect(telegraphFor(match, action, 'blue')).toBeNull()
   })
 })

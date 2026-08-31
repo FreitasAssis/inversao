@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { Board, PIECE_PT } from './Board'
+import { Board, PIECE_PT, telegraphFor } from './Board'
 import type { Telegraph } from './Board'
 import { Annotation } from './Annotation'
 import { Mark } from './Mark'
@@ -30,7 +30,7 @@ import type { Table } from '../engine/table'
 import { actionsLeft, applyAction, awaitingDraw, startMatch, turn } from '../engine/match'
 import type { Action, Match, MatchConfig } from '../engine/match'
 import { PIECES } from '../engine/types'
-import type { BoardCode, Cell, Piece, Side } from '../engine/types'
+import type { BoardCode, Piece, Side } from '../engine/types'
 
 /**
  * The root opens on a board that is already playable: Escolha Sorteada on
@@ -324,6 +324,10 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700 }: AppProps) {
     }
     if (action.type === 'draw') sound.play('draw')
     else if (action.type === 'move') sound.play('land')
+    // Um lance é um gesto em duas partes, pegar e pousar. Um passe é a primeira
+    // sem a segunda: a peça foi nomeada e não foi a lugar nenhum — que é
+    // exatamente o que o som de pegar, sozinho, diz.
+    else if (action.type === 'pass') sound.play('move')
   }
 
   /**
@@ -383,14 +387,17 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700 }: AppProps) {
         () => {
           void controller(match).then((action) => {
             if (!live) return
-            // Only a move is worth announcing, and only the AI's: you already
-            // know what you are about to do yourself.
-            if (action.type !== 'move' || mover === undefined) {
+            // Um passe é anunciado pela mesma batida que um lance, e isso é o
+            // ponto: ele não move nada. Sem a batida ele era aplicado no mesmo
+            // instante e em silêncio, e a vez voltava presa a um símbolo que o
+            // jogador nunca viu ninguém escolher — a jogada mais forte da
+            // Escolha Sorteada acontecendo fora da tela.
+            const announced = mover === undefined ? null : telegraphFor(match, action, mover)
+            if (announced === null) {
               play(action)
               return
             }
-            const from = match.placement[mover][PIECES.indexOf(action.piece)] as Cell
-            setTelegraph({ from, to: action.to })
+            setTelegraph(announced)
             timers.push(
               setTimeout(() => {
                 if (!live) return
