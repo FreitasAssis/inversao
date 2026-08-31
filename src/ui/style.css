@@ -94,6 +94,23 @@
   /* O canto do quadrado, em fração do glifo, para acompanhar o tamanho da
      casa em vez de endurecer conforme o tabuleiro cresce. */
   --piece-radius: 12%;
+
+  /*
+   * A profundidade das peças.
+   *
+   * `filter: drop-shadow` e não `box-shadow`, e isso não é preferência: uma
+   * caixa de sombra é recortada junto com o `clip-path`, então o triângulo
+   * ficaria sem sombra enquanto o círculo e o quadrado ganhavam a delas — a
+   * mesma assimetria que já apareceu três vezes neste arquivo. O filtro segue a
+   * silhueta, qualquer que ela seja.
+   *
+   * No claro, sombra embaixo. No escuro isso seria invisível contra um papel
+   * quase preto, então a profundidade vem de um fio de luz em cima — que é como
+   * uma ficha real se comporta sob luz ambiente.
+   */
+  --lift: drop-shadow(0 1px 1px rgb(0 0 0 / 0.32)) drop-shadow(0 3px 5px rgb(0 0 0 / 0.24));
+  --well: inset 0 2px 4px rgb(0 0 0 / 0.1);
+  --surface: color-mix(in srgb, var(--ink) 4%, var(--paper));
 }
 
 @media (prefers-color-scheme: dark) {
@@ -106,6 +123,9 @@
     --line: #9c9a92;
     --ink: #c2c0b6;
     --paper: #1c1c1a;
+    --lift: drop-shadow(0 -1px 0 rgb(255 255 255 / 0.28)) drop-shadow(0 3px 6px rgb(0 0 0 / 0.6));
+    --well: inset 0 2px 4px rgb(0 0 0 / 0.45);
+    --surface: color-mix(in srgb, var(--ink) 7%, var(--paper));
   }
 }
 
@@ -348,7 +368,13 @@ h1 {
   aspect-ratio: 1;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: transparent;
+  /*
+   * A casa precisa ser superfície, não contorno sobre nada — sem algo em que
+   * pousar, a peça não tem como parecer pousada. Um plano ligeiramente distinto
+   * do papel, rebaixado, e a peça projeta sombra dentro dele.
+   */
+  box-shadow: var(--well);
+  background: var(--surface);
   display: grid;
   place-items: center;
   cursor: default;
@@ -427,10 +453,22 @@ h1 {
   outline-offset: 3px;
 }
 
-/* The glyph is the piece; its shape is the destination, its fill the owner. */
+/*
+ * The glyph is the piece; its shape is the destination, its fill the owner.
+ *
+ * O filtro dá corpo à peça — ela passa a ler como uma ficha pousada sobre o
+ * tabuleiro em vez de uma forma pintada nele. Fica no `.glyph` e não na casa,
+ * porque o que tem espessura é a peça, não a casa.
+ */
 .glyph {
   width: 58%;
   height: 58%;
+  filter: var(--lift);
+}
+
+/* O encaixe vazio é um rebaixo, não um objeto: nada de sombra projetada. */
+.cell[data-slot]:not([data-piece]) .glyph {
+  filter: none;
 }
 
 .cell[data-piece='circle'] .glyph {

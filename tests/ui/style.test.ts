@@ -54,6 +54,31 @@ describe('the stylesheet', () => {
     expect(raw.map((match) => match[0].trim())).toEqual([])
   })
 
+  test('gives the pieces body with a filter, never with a box shadow', () => {
+    // `box-shadow` é recortado junto com o `clip-path`. Usá-la aqui deixaria o
+    // triângulo sem sombra enquanto o círculo e o quadrado ganhavam a delas —
+    // a mesma assimetria que já apareceu três vezes neste arquivo, sempre com
+    // a mesma causa e sempre descoberta olhando a tela.
+    //
+    // `filter: drop-shadow` segue a silhueta, qualquer que ela seja.
+    // Ancorado no início de linha: `indexOf('.glyph {')` casa com o fim de
+    // `.cell[data-arrived] .glyph {`, que é outra regra.
+    const rule = (css.match(/^\.glyph \{([^}]*)\}/m) as RegExpMatchArray)[1] as string
+
+    expect(rule).toContain('filter:')
+    expect(rule).not.toContain('box-shadow')
+  })
+
+  test('carries the depth in both schemes, since a dark shadow on dark is nothing', () => {
+    // Sombra preta sobre papel quase preto é invisível. No escuro a
+    // profundidade vem de um fio de luz em cima, que é o que uma ficha real faz
+    // sob luz ambiente.
+    const dark = css.slice(css.indexOf('@media (prefers-color-scheme: dark)'))
+
+    expect(css).toMatch(/--lift:/)
+    expect(dark.slice(0, dark.indexOf('\n}'))).toMatch(/--lift:/)
+  })
+
   test('drives the slide off the same gap the board is drawn with', () => {
     // The distance a piece travels when it slides *is* the gap between cells.
     // They were the same number typed twice, so changing one broke the
