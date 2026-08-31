@@ -5,12 +5,20 @@
  */
 
 :root {
-  --blue: #378add;
-  --orange: #ef9f27;
+  /*
+   * As cores das peças mudam com o esquema, como o texto e o papel já mudavam.
+   * Antes eram idênticas nos dois — e o laranja ficava em 2,06 contra o papel
+   * claro, abaixo do mínimo de 3, enquanto lia perfeitamente bem no escuro.
+   *
+   * Não existe cor única que sirva aos dois: escurecer o bastante para o claro
+   * estraga o escuro. Há teste medindo os dois esquemas.
+   */
+  --blue: #2f78c4;
+  --orange: #b5651d;
+  --legal: #2a8c4c;
   --line: #73726c;
   --ink: #3d3d3a;
   --paper: #faf9f5;
-  --legal: #2f9e56;
   /*
    * Every animation multiplies by this. The pacing risk runs both ways — the
    * analysis warns the game may feel slow (project doc 13), while a move that
@@ -55,6 +63,16 @@
    */
   --cell-gap: var(--space-2);
 
+  /*
+   * Quanto da casa a peça ocupa. Está aqui pelo mesmo motivo que o vão: a
+   * animação precisa dele para converter a distância percorrida.
+   *
+   * Porcentagem em `translate` resolve contra a caixa do **próprio** elemento, e
+   * quem desliza é a peça, não a casa. Então `100%` ali são 58% de uma casa, e o
+   * deslize precisa dividir por este número para andar uma casa inteira.
+   */
+  --glyph: 0.58;
+
   /* Corners, for the same reason they were needed above: they were 0,25 and
      0,4 with nothing saying which was meant where. */
   --radius: var(--space-2);
@@ -75,13 +93,49 @@
    */
   --hollow: 11%;
   --hollow-triangle: polygon(50% 24.6%, 82.2% 89%, 17.8% 89%);
+
+  /*
+   * O mesmo para os encaixes vazios, mais fino: eles são informação de fundo,
+   * não peça. Derivado pela mesma fórmula — d = 7.
+   */
+  --hollow-slot: 7%;
+  --hollow-slot-triangle: polygon(50% 15.7%, 88.7% 93%, 11.3% 93%);
+
+  /* O canto do quadrado, em fração do glifo, para acompanhar o tamanho da
+     casa em vez de endurecer conforme o tabuleiro cresce. */
+  --piece-radius: 12%;
+
+  /*
+   * A profundidade das peças.
+   *
+   * `filter: drop-shadow` e não `box-shadow`, e isso não é preferência: uma
+   * caixa de sombra é recortada junto com o `clip-path`, então o triângulo
+   * ficaria sem sombra enquanto o círculo e o quadrado ganhavam a delas — a
+   * mesma assimetria que já apareceu três vezes neste arquivo. O filtro segue a
+   * silhueta, qualquer que ela seja.
+   *
+   * No claro, sombra embaixo. No escuro isso seria invisível contra um papel
+   * quase preto, então a profundidade vem de um fio de luz em cima — que é como
+   * uma ficha real se comporta sob luz ambiente.
+   */
+  --lift: drop-shadow(0 1px 1px rgb(0 0 0 / 0.32)) drop-shadow(0 3px 5px rgb(0 0 0 / 0.24));
+  --well: inset 0 2px 4px rgb(0 0 0 / 0.1);
+  --surface: color-mix(in srgb, var(--ink) 4%, var(--paper));
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
+    /* Sobre papel escuro as peças podem ser mais claras e ganham contraste com
+       isso: o laranja vai de 2,06 no claro para 7,85 aqui. */
+    --blue: #378add;
+    --orange: #ef9f27;
+    --legal: #2f9e56;
     --line: #9c9a92;
     --ink: #c2c0b6;
     --paper: #1c1c1a;
+    --lift: drop-shadow(0 -1px 0 rgb(255 255 255 / 0.28)) drop-shadow(0 3px 6px rgb(0 0 0 / 0.6));
+    --well: inset 0 2px 4px rgb(0 0 0 / 0.45);
+    --surface: color-mix(in srgb, var(--ink) 7%, var(--paper));
   }
 }
 
@@ -324,7 +378,13 @@ h1 {
   aspect-ratio: 1;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: transparent;
+  /*
+   * A casa precisa ser superfície, não contorno sobre nada — sem algo em que
+   * pousar, a peça não tem como parecer pousada. Um plano ligeiramente distinto
+   * do papel, rebaixado, e a peça projeta sombra dentro dele.
+   */
+  box-shadow: var(--well);
+  background: var(--surface);
   display: grid;
   place-items: center;
   cursor: default;
@@ -382,8 +442,8 @@ h1 {
 @keyframes slide-in {
   from {
     transform: translate(
-      calc(var(--dx, 0) * (100% + var(--cell-gap))),
-      calc(var(--dy, 0) * (100% + var(--cell-gap)))
+      calc(var(--dx, 0) * (100% / var(--glyph) + var(--cell-gap))),
+      calc(var(--dy, 0) * (100% / var(--glyph) + var(--cell-gap)))
     );
   }
   to {
@@ -403,14 +463,35 @@ h1 {
   outline-offset: 3px;
 }
 
-/* The glyph is the piece; its shape is the destination, its fill the owner. */
+/*
+ * The glyph is the piece; its shape is the destination, its fill the owner.
+ *
+ * O filtro dá corpo à peça — ela passa a ler como uma ficha pousada sobre o
+ * tabuleiro em vez de uma forma pintada nele. Fica no `.glyph` e não na casa,
+ * porque o que tem espessura é a peça, não a casa.
+ */
 .glyph {
-  width: 58%;
-  height: 58%;
+  width: calc(var(--glyph) * 100%);
+  height: calc(var(--glyph) * 100%);
+  filter: var(--lift);
+}
+
+/* O encaixe vazio é um rebaixo, não um objeto: nada de sombra projetada. */
+.cell[data-slot]:not([data-piece]) .glyph {
+  filter: none;
 }
 
 .cell[data-piece='circle'] .glyph {
   border-radius: 50%;
+}
+
+/*
+ * O quadrado tinha canto vivo dentro de uma casa arredondada, ao lado de uma
+ * marca cujo quadrado tem raio. Era a única forma do jogo que não acompanhava
+ * o resto.
+ */
+.cell[data-piece='square'] .glyph {
+  border-radius: var(--piece-radius);
 }
 
 .cell[data-piece='triangle'] .glyph {
@@ -442,13 +523,38 @@ h1 {
   --slot: var(--orange);
 }
 
+/*
+ * Uma técnica só para as três formas, como as peças.
+ *
+ * Eram duas — `border` no círculo e no quadrado, recortes aninhados no
+ * triângulo —, com espessuras que não batiam. Ficou assim porque o tracejado
+ * que carregava o dono no modo sem cor não existe em `clip-path`.
+ *
+ * A saída não foi insistir no tracejado: no modo sem cor os encaixes passam a
+ * usar a mesma linguagem que as peças já usam ali — cheio contra vazado —, que
+ * funciona com recorte e é o vocabulário que o jogador já aprendeu.
+ */
 .cell[data-slot]:not([data-piece]) .glyph {
-  border: 1.5px solid var(--slot, var(--line));
+  position: relative;
+  background: var(--slot, var(--line));
   opacity: 0.75;
 }
 
-.cell[data-slot='circle']:not([data-piece]) .glyph {
+.cell[data-slot]:not([data-piece]) .glyph::after {
+  content: '';
+  position: absolute;
+  inset: var(--hollow-slot);
+  background: var(--paper);
+}
+
+.cell[data-slot='circle']:not([data-piece]) .glyph,
+.cell[data-slot='circle']:not([data-piece]) .glyph::after {
   border-radius: 50%;
+}
+
+.cell[data-slot='square']:not([data-piece]) .glyph,
+.cell[data-slot='square']:not([data-piece]) .glyph::after {
+  border-radius: var(--piece-radius);
 }
 
 /*
@@ -459,30 +565,32 @@ h1 {
  * back out of the middle.
  */
 .cell[data-slot='triangle']:not([data-piece]) .glyph {
-  position: relative;
   clip-path: polygon(50% 0, 100% 100%, 0 100%);
-  background: var(--slot, var(--line));
-  border: none;
 }
 
+/* Não `inset`: deslocar um polígono para dentro move cada vértice pela
+   bissetriz, e o ápice é o canto mais fechado que um triângulo tem. */
 .cell[data-slot='triangle']:not([data-piece]) .glyph::after {
-  content: '';
-  position: absolute;
   inset: 0;
-  background: var(--paper);
-  clip-path: polygon(50% 13%, 87% 91%, 13% 91%);
+  clip-path: var(--hollow-slot-triangle);
 }
 
 /*
  * Colourless: the outline style carries the owner, since the hue cannot. Same
  * split the pieces use — one side plain, the other marked.
  */
+/*
+ * Sem cor, o dono do encaixe passa a ser cheio contra vazado — a mesma
+ * distinção que as peças já usam aqui, e que o jogador portanto já leu uma vez.
+ * O tracejado que fazia esse papel não sobrevive a um `clip-path`, e era o que
+ * mantinha os encaixes em duas técnicas.
+ */
 .app[data-colourless] .cell[data-slot-side] {
-  --slot: var(--line);
+  --slot: var(--ink);
 }
 
-.app[data-colourless] .cell[data-slot-side='orange']:not([data-piece]) .glyph {
-  border-style: dashed;
+.app[data-colourless] .cell[data-slot-side='blue']:not([data-piece]) .glyph::after {
+  display: none;
 }
 
 /*
@@ -704,11 +812,20 @@ h1 {
   background: var(--orange);
 }
 
+/*
+ * A divisa é desenhada, não deixada por conta da cor.
+ *
+ * Contraste é luminância, e duas cores que se destacam bem do mesmo papel têm
+ * luminância parecida — logo se distinguem mal *entre si*. Nenhum par de azul
+ * legível com laranja legível chega a 3:1 entre os dois; é geometria, não
+ * escolha ruim. Então a fronteira ganha uma linha própria.
+ */
 .share {
   display: block;
   height: 100%;
   width: var(--blue-share, 50%);
   background: var(--blue);
+  border-right: 2px solid var(--paper);
   transition: width calc(0.35s * var(--beat)) ease-out;
 }
 

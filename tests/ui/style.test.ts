@@ -54,6 +54,31 @@ describe('the stylesheet', () => {
     expect(raw.map((match) => match[0].trim())).toEqual([])
   })
 
+  test('gives the pieces body with a filter, never with a box shadow', () => {
+    // `box-shadow` é recortado junto com o `clip-path`. Usá-la aqui deixaria o
+    // triângulo sem sombra enquanto o círculo e o quadrado ganhavam a delas —
+    // a mesma assimetria que já apareceu três vezes neste arquivo, sempre com
+    // a mesma causa e sempre descoberta olhando a tela.
+    //
+    // `filter: drop-shadow` segue a silhueta, qualquer que ela seja.
+    // Ancorado no início de linha: `indexOf('.glyph {')` casa com o fim de
+    // `.cell[data-arrived] .glyph {`, que é outra regra.
+    const rule = (css.match(/^\.glyph \{([^}]*)\}/m) as RegExpMatchArray)[1] as string
+
+    expect(rule).toContain('filter:')
+    expect(rule).not.toContain('box-shadow')
+  })
+
+  test('carries the depth in both schemes, since a dark shadow on dark is nothing', () => {
+    // Sombra preta sobre papel quase preto é invisível. No escuro a
+    // profundidade vem de um fio de luz em cima, que é o que uma ficha real faz
+    // sob luz ambiente.
+    const dark = css.slice(css.indexOf('@media (prefers-color-scheme: dark)'))
+
+    expect(css).toMatch(/--lift:/)
+    expect(dark.slice(0, dark.indexOf('\n}'))).toMatch(/--lift:/)
+  })
+
   test('drives the slide off the same gap the board is drawn with', () => {
     // The distance a piece travels when it slides *is* the gap between cells.
     // They were the same number typed twice, so changing one broke the
@@ -62,5 +87,27 @@ describe('the stylesheet', () => {
 
     expect(slide).toContain('var(--cell-gap)')
     expect(slide.slice(0, slide.indexOf('}')).match(/\d+rem/)).toBeNull()
+  })
+
+  test('desliza uma casa inteira, e não uma peça inteira', () => {
+    // Porcentagem em `translate` resolve contra a caixa do próprio elemento, e
+    // quem desliza é a peça — que tem 58% da casa. Então `100%` ali eram 0,58
+    // casa, e um lance de uma casa cobria pouco mais da metade do caminho,
+    // começando já dentro da casa vizinha.
+    //
+    // Passou despercebido por anos de olhar porque 0,18s de deslize curto ainda
+    // lê como deslize. Nenhum teste de string pegaria: a conta é que estava
+    // errada, não a grafia. Então esta faz a conta.
+    const fraction = Number((css.match(/--glyph:\s*([\d.]+)/) as RegExpMatchArray)[1])
+    const slide = css.slice(css.indexOf('@keyframes slide-in'))
+    const basis = (slide.match(/var\(--dx, 0\) \* \(([^+]+)\+/) as RegExpMatchArray)[1] as string
+
+    // Avaliada em unidades de casa: `100%` é a peça, logo `fraction` de casa.
+    const travel = Function(
+      `const glyph = ${fraction};
+       return ${basis.replace(/var\(--glyph\)/g, 'glyph').replace(/100%/g, 'glyph')}`,
+    )() as number
+
+    expect(travel).toBeCloseTo(1, 10)
   })
 })

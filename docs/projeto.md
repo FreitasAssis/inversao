@@ -1076,9 +1076,16 @@ jogo, e teria que existir com ou sem cronômetro — ver seção 6.4.
       alvo da seção 8.3 é 365 por tabuleiro, ~250 KB no bundle. O conjunto bruto tem 106 mil
       posições qualificadas, então é só rodar.
 - [ ] **`git init`.** O projeto ainda não é um repositório.
-- [ ] **Acabamento visual do tabuleiro.** Peças, encaixes e faixa central são funcionais mas
-      ainda são andaime. Fazer junto com a paleta (item abaixo): retocar cor e forma antes
-      dela existir é fazer duas vezes.
+- [x] **Acabamento visual do tabuleiro.** Feito junto com a paleta, como o item previa.
+
+      Peças e encaixes passam a usar **uma técnica só** para as três formas, e larguras
+      derivadas de uma variável em vez de escolhidas a olho — o contorno do triângulo precisa
+      do polígono deslocado pela bissetriz, e errar isso afina o traço no ápice sem que
+      ninguém perceba. Há teste conferindo os dois polígonos contra a fórmula.
+
+      No modo sem cor, o dono do encaixe passou de tracejado para **cheio contra vazado**, que
+      é a distinção que as peças já usam ali. O tracejado não sobrevive a um `clip-path`, e era
+      ele que mantinha os encaixes em duas técnicas.
 
       *Não confundir com legibilidade da mecânica* — a encenação do sorteio e o telegrafo do
       lance da IA não dependem de paleta e já estão feitos, porque são o que torna as regras
