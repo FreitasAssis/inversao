@@ -858,6 +858,47 @@ p.evaluation strong {
  * The finished match, read back (project doc 7.1). Not a chart with axes — it
  * is a shape read at a glance, and the sentence underneath carries the numbers.
  */
+/*
+ * Compartilhar (projeto 7). Chama-se `sharing` porque `share` já é a parcela
+ * da barra de avaliação — outra palavra inteiramente, no mesmo arquivo global.
+ *
+ * Fica acima da anotação, e não abaixo, porque a
+ * anotação é o conteúdo do card: quem acabou de ler o que aconteceu já rolou
+ * para longe do botão.
+ */
+.sharing {
+  margin-top: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+
+.sharing-said {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--line);
+}
+
+/*
+ * A saída de emergência, quando nem compartilhar nem copiar funcionam. Fonte
+ * monoespaçada de propósito: é a única situação em que a grade do card aparece
+ * como texto na tela, e em fonte proporcional ela sai torta.
+ */
+.sharing-text {
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--space-3);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  resize: vertical;
+}
+
 .annotation {
   margin-top: var(--space-6);
   padding-top: var(--space-5);

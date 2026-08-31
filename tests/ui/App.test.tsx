@@ -694,3 +694,22 @@ describe('App', () => {
     expect(screen.queryByRole('gridcell', { name: /B3, Azul círculo/ })).toBeNull()
   })
 })
+
+describe('compartilhando a partida', () => {
+  test('não oferece compartilhar com a partida em andamento', () => {
+    // Não há o que contar ainda, e o card mostraria uma posição no meio do
+    // caminho como se fosse o resultado.
+    render(<App drawDelayMs={0} seed={2} telegraphMs={0} />)
+
+    expect(screen.queryByRole('button', { name: /compartilhar/i })).toBeNull()
+  })
+
+  test('oferece compartilhar assim que a partida acaba', async () => {
+    render(<App drawDelayMs={0} seed={2} telegraphMs={0} />)
+
+    await screen.findByRole('button', { name: /desistir/i })
+    await userEvent.setup().click(screen.getByRole('button', { name: /desistir/i }))
+
+    expect(await screen.findByRole('button', { name: /compartilhar/i })).toBeInTheDocument()
+  })
+})

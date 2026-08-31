@@ -258,8 +258,11 @@ function curveShapes(input: CardInput, palette: Palette): Shape[] {
  * pintura seria a única parte do desenho sem cobertura nenhuma.
  */
 export type Ctx = {
-  fillStyle: string
-  strokeStyle: string
+  // A união é a do próprio canvas. Estreitar para `string` obrigaria a uma
+  // conversão no ponto de uso, que é onde uma incompatibilidade de verdade
+  // deixaria de ser vista.
+  fillStyle: string | CanvasGradient | CanvasPattern
+  strokeStyle: string | CanvasGradient | CanvasPattern
   lineWidth: number
   font: string
   textAlign: string
