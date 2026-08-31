@@ -807,9 +807,20 @@ desestimula, e o segundo é o que vale gabar.
 > tabuleiro (5 MB) ou um `puzzles.json` mais rico. Com o arquivo atual dá para dar o número
 > exato quando o jogador acerta ou joga o segundo melhor, e só "não foi o melhor" no resto.
 
-**Arquivo semente:** `puzzles.json` traz 180 puzzles, 60 por tabuleiro, equilibrados em 20 de
-cada faixa. Gerado pelo `extrai` a partir das tabelas em `double` convergidas a delta < 1e-9,
-com margens de 0,0481 a 0,4167. Regenerável com `make puzzles.json`.
+**O arquivo:** `puzzles.json` traz **1.098 puzzles — 366 por tabuleiro**, um ano bissexto de
+desafios, equilibrados em 122 de cada faixa. Gerado pelo `extrai` a partir das tabelas em
+`double` convergidas a delta < 1e-9, com margens de 0,0478 a 0,5120. Regenerável com
+`make puzzles.json`, e a quantidade por tabuleiro é o `POR_TAB` do Makefile.
+
+O ciclo da seção 8.3 garante que nenhum puzzle repete antes de todos terem saído — e o ciclo
+tem o tamanho da lista. Com 60 por tabuleiro, quem jogasse todo dia via repetição em dois
+meses; com 366, em um ano.
+
+**Custo no bundle:** o arquivo é importado, não buscado, então vai no pacote principal — 245
+KB crus, cerca de 18 KB comprimidos, carregados por todo mundo, inclusive quem nunca abre
+`/desafios`. É o preço de os desafios funcionarem offline sem nenhuma requisição a mais.
+Carregá-lo sob demanda economizaria isso, mas criaria um pedaço carregado tardiamente — e a
+ausência deles é o que justifica o `skipWaiting` do service worker (seção 5.1).
 
 **Todo puzzle é conferido contra os dois limites.** Como `lo` e `hi` não se encontram — a
 distância entre eles é a massa de empate, propriedade do jogo e não erro de iteração (seção

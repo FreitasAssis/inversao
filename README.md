@@ -89,7 +89,7 @@ tests/    espelha src/, mais os testes contra os oráculos em C
 tools/    quatro programas em C que geram os artefatos, mais o Makefile
           icons.mjs        — desenha os ícones do app, sem biblioteca de imagem
 data/     oraculos.json    — fixture de verificação do motor
-          puzzles.json     — 180 puzzles extraídos das tabelas
+          puzzles.json     — 1.098 puzzles, um ano de desafios
 ```
 
 ```
