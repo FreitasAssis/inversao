@@ -10,6 +10,9 @@ CFLAGS  ?= -O2 -Wall
 BOARDS   = dbu nbn bbb          # Escolha Sorteada: os tres
 ROD      = dbu bbb              # Rodizio: so onde produz jogo vivo
 SWEEPS  ?= 4000
+# Puzzles por tabuleiro. 366 cobre um ano bissexto e divide exato por tres, que
+# e o numero de faixas de dificuldade — 122 de cada, sem sobra.
+POR_TAB ?= 366
 DATA    ?= ../data
 DIST    ?= ../public/data
 
@@ -75,9 +78,9 @@ $(DATA)/puzzles.json: extrai $(foreach b,$(BOARDS),tabela-$(b)-sorteio.bin) \
 	@printf '  "_about": "%s",\n' \
 	  "Puzzles extracted from the Escolha Sorteada probability tables. The player holds the initiative (plays blue) and must name the symbol and pick the destination. value/secondValue are P(blue wins) for the best and second-best move; margin is the difference. Every puzzle is cross-checked against BOTH converged bounds: lo and hi must agree on the best move and on the second-best symbol, and their margins must agree within 0.02; the published numbers are the midpoint. This matters because lo and hi do not meet - the gap between them is the board structural draw mass, not iteration error. NOTE: value, secondValue and margin are rounded independently from the solver doubles, so value-secondValue differs from margin by up to 1e-4 - use margin, do not recompute. pass=true means the move is to name a piece with no legal move, passing on purpose to force the opponent to move that symbol; to is null in that case, never -1. question=piece when the two best moves belong to different symbols (the puzzle is which piece to name), destination when they share a symbol. tier comes from absolute margin bands: sharp 0.05-0.10, subtle 0.10-0.20, clear above 0.20." >> $@
 	@echo '  "boards": [' >> $@
-	@./extrai dbu Setas 60 >> $@ ; echo ',' >> $@
-	@./extrai nbn Ponte 60 >> $@ ; echo ',' >> $@
-	@./extrai bbb Grade 60 >> $@
+	@./extrai dbu Setas $(POR_TAB) >> $@ ; echo ',' >> $@
+	@./extrai nbn Ponte $(POR_TAB) >> $@ ; echo ',' >> $@
+	@./extrai bbb Grade $(POR_TAB) >> $@
 	@echo '  ]' >> $@
 	@echo '}' >> $@
 
