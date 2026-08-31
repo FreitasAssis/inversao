@@ -3,9 +3,13 @@
 Documento de arquitetura e escopo. As regras do jogo estão em
 [`especificacao.md`](especificacao.md) — este documento assume que elas estão fechadas.
 
-**O site é o jogo.** Um jogo, um domínio, nome `Inversão`. Não é uma coleção. Se um
+**O site é o jogo.** Um jogo, um endereço, nome `Inversão`. Não é uma coleção. Se um
 segundo jogo aparecer um dia, a raiz vira índice e a rota do primeiro não muda — mas nada
 de plataforma deve ser construído antes disso existir.
+
+No ar em **<https://inversao.luizfreitas.com.br>**, como subdomínio de um domínio que já
+existia. Isso deixou o projeto com **custo anual zero**, e é melhor que um domínio dedicado
+para um jogo só — o endereço fica no nome de quem o fez, que é o que um portfólio quer.
 
 ---
 
@@ -18,7 +22,7 @@ de plataforma deve ser construído antes disso existir.
 | hospedagem | Cloudflare Workers, só arquivos estáticos | custo zero, e o cron do anti-pausa fica no mesmo provedor |
 | tempo real | Supabase Realtime (Broadcast) | sem servidor próprio, plano gratuito folgado |
 | ping anti-pausa | Cloudflare Worker (cron trigger) | não desativa por inatividade do repositório |
-| custo anual | domínio, e nada mais | — |
+| custo anual | **nenhum** | subdomínio de um domínio que já existia |
 
 **Repositório público.** Num portfólio, o código costuma valer mais que o site.
 
@@ -1079,7 +1083,12 @@ jogo, e teria que existir com ou sem cronômetro — ver seção 6.4.
       *Não confundir com legibilidade da mecânica* — a encenação do sorteio e o telegrafo do
       lance da IA não dependem de paleta e já estão feitos, porque são o que torna as regras
       visíveis, não o que as deixa bonitas.
-- [ ] Registrar o domínio.
+- [x] **Endereço definitivo, sem custo.** `inversao.luizfreitas.com.br`, subdomínio de um
+      domínio que já existia. A ideia de registrar um domínio próprio foi descartada: não se
+      justifica para um jogo só, e um subdomínio pessoal serve melhor num portfólio.
+
+      A rota `workers.dev` foi desligada — dois endereços servindo a mesma coisa confundem
+      quem chega e contam como conteúdo duplicado para busca.
 - [x] **Logo aplicado.** O ícone é o círculo invertido — a marca *é* o teorema, e há teste
       que gira o PNG 180° e exige a troca de cores. O ciclo da seção 5 ficou como marca cheia
       ao lado do nome, trocando de cor com ele.
