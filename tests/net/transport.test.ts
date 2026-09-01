@@ -203,3 +203,39 @@ describe('quem chega depois', () => {
     expect(late).toHaveLength(2)
   })
 })
+
+describe('quem assiste', () => {
+  test('recebe tudo, do começo', () => {
+    const room = createRoom(always('blue'))
+    const blue = room.seat('blue')
+    blue.onReceive(() => {})
+    blue.send({ kind: 'draw', round: 0 })
+
+    const watched: SequencedAction[] = []
+    room.watch((message) => watched.push(message))
+    blue.send({ kind: 'act', action: { type: 'resign' } })
+
+    expect(watched.map((message) => message.action.type)).toEqual(['draw', 'resign'])
+  })
+
+  test('não tem por onde jogar', () => {
+    // A ausência do `send` é a regra. Um espectador com `send` e um controle
+    // desabilitado em algum lugar seria a regra morando na interface.
+    const room = createRoom(always('blue'))
+
+    expect(Object.keys(room.watch(() => {}))).not.toContain('send')
+    expect(typeof room.watch(() => {})).toBe('function')
+  })
+
+  test('para de receber ao sair', () => {
+    const room = createRoom(always('blue'))
+    const blue = room.seat('blue')
+    const watched: SequencedAction[] = []
+    const stop = room.watch((message) => watched.push(message))
+
+    stop()
+    blue.send({ kind: 'act', action: { type: 'resign' } })
+
+    expect(watched).toHaveLength(0)
+  })
+})

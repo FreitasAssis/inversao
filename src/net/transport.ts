@@ -32,6 +32,12 @@ export type Deal = (round: number) => Side
 
 export type Room = {
   seat(side: Side): Transport
+  /**
+   * Assiste sem jogar. Recebe o que já aconteceu e o que vier, e não tem por
+   * onde mandar nada — a ausência do `send` é a regra, não um controle
+   * desabilitado em algum lugar.
+   */
+  watch(listen: (message: SequencedAction) => void): () => void
   /** O que quem reconecta recebe: a partida é isto mais o estado inicial. */
   log(): readonly SequencedAction[]
 }
@@ -49,6 +55,7 @@ export function createRoom(deal: Deal): Room {
   const dealt = new Map<number, Side>()
   const log: SequencedAction[] = []
   const listeners = new Map<Side, ((message: SequencedAction) => void)[]>()
+  let watchers: ((message: SequencedAction) => void)[] = []
 
   const broadcast = (from: SequencedAction['from'], action: Action) => {
     const message: SequencedAction = { seq: seq++, from, action }
@@ -58,10 +65,18 @@ export function createRoom(deal: Deal): Room {
     for (const side of [...listeners.keys()]) {
       for (const listen of [...(listeners.get(side) ?? [])]) listen(message)
     }
+    for (const listen of [...watchers]) listen(message)
   }
 
   return {
     log: () => log,
+    watch(listen) {
+      for (const message of log) listen(message)
+      watchers = [...watchers, listen]
+      return () => {
+        watchers = watchers.filter((one) => one !== listen)
+      }
+    },
     seat(side) {
       let open = true
       return {

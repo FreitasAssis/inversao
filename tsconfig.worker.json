@@ -1,0 +1,31 @@
+{
+  // O código de servidor tem tipos próprios, e num arquivo à parte por
+  // necessidade: `lib: DOM` e os tipos do Workers definem `WebSocket` de formas
+  // diferentes, então os dois no mesmo programa se contradizem.
+  //
+  // Sem isto o `worker/` sairia do `include` do tsconfig principal e seria a
+  // única parte do projeto publicada sem checagem de tipo nenhuma.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["@cloudflare/workers-types", "@cloudflare/vitest-pool-workers"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+    "skipLibCheck": true
+  },
+  // Os testes da sala entram aqui e **saem** do tsconfig principal: eles usam
+  // `scheduler`, que é global do Workers, e seriam checados contra o mundo do
+  // navegador. A separação de tipos vale para o teste tanto quanto para o
+  // código.
+  //
+  // O motor e o transporte entram porque a sala os usa — e eles são puros de
+  // propósito, sem React e sem DOM, que é o que os deixa rodar nos dois lados.
+  "include": ["worker", "src/net", "src/engine", "tests/worker"]
+}

@@ -1,10 +1,22 @@
 {
-  // O que a Cloudflare precisa saber para publicar. Nada aqui é código de
-  // servidor, e é de propósito: o jogo inteiro — motor, busca, tabelas e
-  // desafios — roda no navegador, e a ausência de um `main` neste arquivo é a
-  // forma mais direta de dizer isso.
+  // O que a Cloudflare precisa saber para publicar.
+  //
+  // Este arquivo dizia que não havia `main`, e que a ausência era a forma mais
+  // direta de dizer que o jogo inteiro roda no navegador. **Isso mudou**, e o
+  // que mudou é pequeno o bastante para caber numa frase: existe uma sala, ela
+  // carimba quem falou e sorteia a iniciativa, e não conhece as regras do jogo.
+  //
+  // O motor, a busca, as tabelas e os desafios seguem todos no navegador.
   "name": "inversao",
   "compatibility_date": "2026-08-28",
+  "main": "worker/index.ts",
+
+  // A sala. `new_sqlite_classes` e não `new_classes` porque é a variante que o
+  // plano gratuito serve.
+  "durable_objects": {
+    "bindings": [{ "name": "SALA", "class_name": "Sala" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Sala"] }],
 
   "assets": {
     // A saída do Vite. O `npm run build` a produz e o `make publica`, rodado
@@ -16,9 +28,13 @@
     // documento. Sem isto, um link compartilhado dá 404 no acesso direto ou na
     // recarga — justamente o link que alguém compartilharia.
     //
-    // O `public/_redirects` diz o mesmo, e continua ali porque também vale se
-    // o projeto voltar a ser servido pelo Pages. Quem responder primeiro
-    // responde igual.
-    "not_found_handling": "single-page-application"
+    // Não use um `public/_redirects` para o mesmo fim: o validador do Workers o
+    // recusa por laço infinito, e há teste impedindo o arquivo de voltar.
+    "not_found_handling": "single-page-application",
+
+    // Sem isto o multiplayer não existiria: `single-page-application` responde
+    // o `index.html` para **todo** endereço sem arquivo correspondente, e
+    // engoliria o pedido de WebSocket antes de ele chegar à sala.
+    "run_worker_first": ["/sala/*"]
   }
 }
