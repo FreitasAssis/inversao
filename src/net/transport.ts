@@ -22,7 +22,8 @@ export type Outbound =
 
 export interface Transport {
   send(message: Outbound): void
-  onReceive(listen: (message: SequencedAction) => void): void
+  /** Devolve como se desfazer: um efeito que remonta não pode duplicar ouvinte. */
+  onReceive(listen: (message: SequencedAction) => void): () => void
   close(): void
 }
 
@@ -84,7 +85,18 @@ export function createRoom(deal: Deal): Room {
           broadcast('server', { type: 'draw', initiative })
         },
         onReceive(listen) {
+          // Quem assina recebe primeiro tudo o que já aconteceu, em ordem.
+          //
+          // Não é conveniência: **o segundo jogador sempre chega depois**, e sem
+          // isto ele começaria com o tabuleiro em branco enquanto o primeiro já
+          // teria o sorteio da rodada. É o mesmo mecanismo da reconexão — a
+          // partida é estado inicial mais lista de ações, e assinar é receber a
+          // lista.
+          for (const message of log) listen(message)
           listeners.set(side, [...(listeners.get(side) ?? []), listen])
+          return () => {
+            listeners.set(side, (listeners.get(side) ?? []).filter((one) => one !== listen))
+          }
         },
         close() {
           open = false

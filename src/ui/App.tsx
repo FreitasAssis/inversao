@@ -36,6 +36,8 @@ import { actionsLeft, applyAction, awaitingDraw, startMatch, turn } from '../eng
 import type { Action, Match, MatchConfig } from '../engine/match'
 import { PIECES } from '../engine/types'
 import type { BoardCode, Piece, Side } from '../engine/types'
+import { admits } from '../net/wire'
+import type { Transport } from '../net/transport'
 
 /**
  * The root opens on a board that is already playable: Escolha Sorteada on
@@ -115,9 +117,17 @@ export type AppProps = Readonly<{
    * the other direction, so this stays a beat, not a wait).
    */
   telegraphMs?: number
+  /**
+   * A ligação com a sala, quando a partida é online.
+   *
+   * Ausente é o que sempre foi: partida local, contra a IA ou em dois no mesmo
+   * aparelho. Presente muda três coisas e nada mais — de onde saem os lances,
+   * quem sorteia, e o fato de não haver IA nenhuma para consultar.
+   */
+  online?: { transport: Transport; seat: Side } | undefined
 }>
 
-export function App({ drawDelayMs = 550, seed, telegraphMs = 700 }: AppProps) {
+export function App({ drawDelayMs = 550, seed, telegraphMs = 700, online }: AppProps) {
   /**
    * A match interrupted on this device, read once. Everything the panel shows
    * is seeded from it, so reopening the page lands on the game that was left
@@ -189,7 +199,10 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700 }: AppProps) {
    * controls on every render.
    */
   const decreed = mechanic === 'rotation' ? humansFor(level) : null
-  const seats: Side[] = decreed ?? humans
+  // Online são dois humanos por definição: não há IA para consultar, e o nível
+  // não significa nada. O que separa os dois lados é o assento, não o assento
+  // ser humano.
+  const seats: Side[] = online !== undefined ? ['blue', 'orange'] : (decreed ?? humans)
   const opened_ = decreed === null ? opening : decidedOpening(board) ?? opening
 
   const config = useMemo<MatchConfig>(
@@ -243,8 +256,12 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700 }: AppProps) {
   // Kept on every change, thrown away by `writeSaved` itself once the match is
   // over or has not begun: there is no game to come back to in either case.
   useEffect(() => {
+    // Partida online não é salva: a sala não sobrevive ao fechar da aba, e
+    // restaurar levaria a pessoa de volta a um tabuleiro sem adversário do
+    // outro lado. Reconectar é outra coisa, e vem da sala.
+    if (online !== undefined) return
     writeSaved({ match, seed: matchSeed, humans: seats, level })
-  }, [match, matchSeed, seats, level])
+  }, [match, matchSeed, seats, level, online])
 
   // One draw source per match, keyed on the round. Building a fresh one per
   // round with a different seed would make "seeded" mean nothing.
@@ -420,6 +437,14 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700 }: AppProps) {
 
 
   function play(action: Action) {
+    if (online !== undefined) {
+      // Online ninguém aplica o próprio lance: manda, e aplica quando ele volta
+      // carimbado. Assim existe uma ordem só, a da sala, em vez de duas que
+      // precisam concordar.
+      if (turn(match)?.side !== online.seat) return
+      online.transport.send({ kind: 'act', action })
+      return
+    }
     setMatch((current) => {
       const result = applyAction(current, action)
       if (!result.ok) return current
@@ -431,9 +456,66 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700 }: AppProps) {
     })
   }
 
+  /**
+   * O que chega da sala.
+   *
+   * Toda mensagem passa por `admits` antes do motor: ela confere ordem e
+   * **autoria**, que é o que o motor não tem como saber — `Action` não diz quem
+   * jogou, e sem esta checagem `resign` mandado na vez do adversário registraria
+   * que ele desistiu.
+   *
+   * O contador segue a **sala**, e não a lista de ações. A primeira versão usava
+   * `actions.length`, com o raciocínio de que toda mensagem aceita acrescenta
+   * exatamente uma ação — verdadeiro, e insuficiente: a sala numera tudo o que
+   * transmite, inclusive o que os clientes recusam, porque ela não conhece as
+   * regras. Uma única mensagem recusada dessincronizava a sequência para sempre,
+   * e a partida travava depois de qualquer tentativa de trapaça.
+   *
+   * Numa ref e não em estado: ele não muda nada do que se desenha, e passar por
+   * um render entre duas mensagens perderia a segunda.
+   */
+  const expected = useRef(0)
+  useEffect(() => {
+    if (online === undefined) return
+    return online.transport.onReceive((message) => {
+      // Fora do atualizador: React chama atualizador duas vezes em modo estrito,
+      // e um contador incrementado lá dentro pularia mensagens.
+      const at = expected.current
+      if (message.seq !== at) return
+      expected.current = at + 1
+
+      setMatch((current) => {
+        const verdict = admits(current, at, message)
+        if (!verdict.ok) return current
+        cueFor(verdict.match, message.action)
+        if (verdict.match.result !== null && current.result === null) {
+          recordFinished(verdict.match.actions.length)
+        }
+        return verdict.match
+      })
+    })
+  }, [online])
+
+  /**
+   * O sorteio, quando a partida é online: quem sorteia é a sala.
+   *
+   * Os dois clientes pedem, porque nenhum sabe se o outro pediu, e a sala é
+   * idempotente por rodada — o segundo pedido não produz ação nenhuma. Um
+   * cliente que sorteasse escolheria a própria iniciativa, que é o jogo inteiro
+   * da Escolha Sorteada.
+   */
+  useEffect(() => {
+    if (online === undefined || match.result !== null) return
+    if (!awaitingDraw(match)) return
+    const round = match.selector.kind === 'choice' ? match.selector.state.round : 0
+    online.transport.send({ kind: 'draw', round })
+  }, [online, match])
+
   // The draw and the AI both resolve outside the render: a controller hands
   // back a promise of an action, whoever is behind it.
   useEffect(() => {
+    // Online não há IA nem sorteio local: os dois vêm da sala, acima.
+    if (online !== undefined) return
     if (match.result !== null) return
     const mover = turn(match)?.side
     const pending = awaitingDraw(match)
@@ -480,7 +562,7 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700 }: AppProps) {
       live = false
       for (const timer of timers) clearTimeout(timer)
     }
-  }, [match, level, seats, table, drawDelayMs, draw, telegraphMs, beat])
+  }, [match, level, seats, table, drawDelayMs, draw, telegraphMs, beat, online])
 
   return (
     <main

@@ -140,3 +140,66 @@ describe('o sorteio disfarçado de lance', () => {
     expect(admits(match, 0, heard.orange[0] as SequencedAction).ok).toBe(false)
   })
 })
+
+describe('desfazer a assinatura', () => {
+  test('para de entregar a quem se desligou, sem fechar o assento', () => {
+    // Um efeito de React que remonta assina de novo. Sem como se desfazer, o
+    // mesmo lado receberia a mesma mensagem duas vezes.
+    const room = createRoom(always('blue'))
+    const blue = room.seat('blue')
+    const heard: SequencedAction[] = []
+    const stop = blue.onReceive((message) => heard.push(message))
+
+    stop()
+    blue.send({ kind: 'act', action: { type: 'offerDraw' } })
+
+    expect(heard).toHaveLength(0)
+    expect(room.log()).toHaveLength(1)
+  })
+
+  test('desliga só o ouvinte pedido', () => {
+    const room = createRoom(always('blue'))
+    const blue = room.seat('blue')
+    const first: number[] = []
+    const second: number[] = []
+    const stop = blue.onReceive(() => first.push(1))
+    blue.onReceive(() => second.push(1))
+
+    stop()
+    blue.send({ kind: 'act', action: { type: 'offerDraw' } })
+
+    expect(first).toHaveLength(0)
+    expect(second).toHaveLength(1)
+  })
+})
+
+describe('quem chega depois', () => {
+  test('recebe tudo o que já aconteceu, em ordem', () => {
+    // O caso normal, não o excepcional: o segundo jogador sempre entra depois
+    // de o primeiro ter criado a sala, e às vezes depois do primeiro sorteio.
+    const room = createRoom(always('blue'))
+    const blue = room.seat('blue')
+    blue.onReceive(() => {})
+    blue.send({ kind: 'draw', round: 0 })
+    blue.send({ kind: 'act', action: { type: 'offerDraw' } })
+
+    const late: SequencedAction[] = []
+    room.seat('orange').onReceive((message) => late.push(message))
+
+    expect(late.map((message) => message.action.type)).toEqual(['draw', 'offerDraw'])
+    expect(late.map((message) => message.seq)).toEqual([0, 1])
+  })
+
+  test('e segue recebendo o que vier depois', () => {
+    const room = createRoom(always('blue'))
+    const blue = room.seat('blue')
+    blue.onReceive(() => {})
+    blue.send({ kind: 'act', action: { type: 'offerDraw' } })
+
+    const late: SequencedAction[] = []
+    room.seat('orange').onReceive((message) => late.push(message))
+    blue.send({ kind: 'act', action: { type: 'resign' } })
+
+    expect(late).toHaveLength(2)
+  })
+})
