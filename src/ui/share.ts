@@ -128,7 +128,7 @@ export function shareText(match: ShareMatch): string {
 function headline(match: ShareMatch): string {
   const { result, names, level, actions } = match
   const count = `${actions} ações`
-  if (result.kind !== 'win' && result.kind !== 'resignation') {
+  if (result.kind !== 'win' && result.kind !== 'resignation' && result.kind !== 'abandonment') {
     return `${drawWord(result)} · ${count}`
   }
   const winner = names[result.winner]
@@ -136,7 +136,12 @@ function headline(match: ShareMatch): string {
   // O nível pendurado em quem o jogava, que é a Inversa — dizer "Vitória de
   // Luiz (Insano)" atribuiria a ele uma dificuldade que não é dele.
   const beaten = level === null ? loser : `${loser} (${LEVEL_LABELS[level]})`
-  const how = result.kind === 'resignation' ? ', por desistência' : ''
+  const how =
+    result.kind === 'resignation'
+      ? ', por desistência'
+      : result.kind === 'abandonment'
+        ? ', o adversário saiu'
+        : ''
   return `Vitória de ${winner} sobre ${beaten}${how} · ${count}`
 }
 

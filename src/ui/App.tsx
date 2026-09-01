@@ -359,7 +359,8 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700 }: AppProps) {
   function cueFor(next: Match, action: Action) {
     if (next.result !== null) {
       const end = next.result
-      if (end.kind !== 'win' && end.kind !== 'resignation') sound.play('tie')
+      const won = end.kind === 'win' || end.kind === 'resignation' || end.kind === 'abandonment'
+      if (!won) sound.play('tie')
       else if (viewpoint === null || end.winner === viewpoint) sound.play('win')
       else sound.play('defeat')
       return
@@ -383,7 +384,9 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700 }: AppProps) {
   const viewpoint: Side | null = seats.length === 1 ? (seats[0] ?? null) : null
 
   const winner =
-    match.result?.kind === 'win' || match.result?.kind === 'resignation'
+    match.result?.kind === 'win' ||
+    match.result?.kind === 'resignation' ||
+    match.result?.kind === 'abandonment'
       ? match.result.winner
       : null
 

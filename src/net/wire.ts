@@ -51,6 +51,14 @@ export function admits(match: Match, expected: number, message: SequencedAction)
 
   const { from, action } = message
 
+  if (action.type === 'abandon') {
+    // Presença é conhecimento da sala, como o sorteio. Um jogador que pudesse
+    // emitir isto reivindicaria vitória a qualquer momento, sem ninguém ter
+    // saído — e nenhuma regra do jogo poderia notar.
+    if (from !== 'server') return { ok: false, reason: 'só a sala declara abandono' }
+    return apply(match, action)
+  }
+
   if (action.type === 'draw') {
     // Um jogador que pudesse sortear escolheria a própria iniciativa, que é o
     // jogo inteiro da Escolha Sorteada (projeto 2.3).

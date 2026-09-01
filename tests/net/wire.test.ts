@@ -143,3 +143,21 @@ describe('o que o motor já recusa', () => {
     expect(verdict.reason).toBe('illegal destination')
   })
 })
+
+describe('o abandono', () => {
+  test('só a sala declara', () => {
+    // Presença é conhecimento da sala, como o sorteio. Um jogador que pudesse
+    // declarar reivindicaria vitória a qualquer momento, sem ninguém ter saído,
+    // e nenhuma regra do jogo teria como notar.
+    const match = drawn()
+
+    expect(admits(match, 1, wrap(1, 'blue', { type: 'abandon', winner: 'blue' })).ok).toBe(false)
+    expect(admits(match, 1, wrap(1, 'server', { type: 'abandon', winner: 'blue' })).ok).toBe(true)
+  })
+
+  test('a sala declara mesmo com a rodada esperando o sorteio', () => {
+    const match = startMatch({ board: 'dbu', mechanic: 'choice' })
+
+    expect(admits(match, 0, wrap(0, 'server', { type: 'abandon', winner: 'blue' })).ok).toBe(true)
+  })
+})

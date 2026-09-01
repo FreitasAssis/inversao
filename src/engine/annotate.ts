@@ -87,7 +87,9 @@ export function annotate(match: Match, table: Table): Annotation | null {
 function settled(match: Match): Assessment {
   const result = match.result
   const winner =
-    result?.kind === 'win' || result?.kind === 'resignation' ? result.winner : null
+    result?.kind === 'win' || result?.kind === 'resignation' || result?.kind === 'abandonment'
+      ? result.winner
+      : null
   return match.config.mechanic === 'rotation'
     ? { kind: 'verdict', winner, distance: 0 }
     : { kind: 'chance', blue: winner === null ? 0.5 : winner === 'blue' ? 1 : 0 }
