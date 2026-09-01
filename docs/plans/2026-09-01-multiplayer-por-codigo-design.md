@@ -162,8 +162,12 @@ A          ──── {move, círculo, B2} ──────▶  DO ──▶
 B          ──── {move, círculo, C1} ──────▶  DO ──▶ A   (carimbado from:'orange')
 ```
 
-Uma mensagem por lance. Os dois clientes pedem o sorteio; o Durable Object responde ao
-primeiro e repete a resposta ao segundo, então nada depende de qual dos dois pediu.
+Uma mensagem por lance. Os dois clientes pedem o sorteio porque nenhum deles sabe se o outro
+pediu, e a sala é **idempotente por rodada**: o segundo pedido não produz ação nenhuma.
+
+Isto foi corrigido ao construir. O texto anterior dizia que ela "repete a resposta ao
+segundo", o que estaria errado — reemitir poria **dois sorteios na mesma rodada** da lista de
+ações. A primeira resposta já foi para os dois lados.
 
 ### 4.4 Revanche
 
