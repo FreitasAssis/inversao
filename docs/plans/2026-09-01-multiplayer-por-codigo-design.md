@@ -288,6 +288,109 @@ Durable Object, que conexões tenham papel e só algumas tenham assento.
 Parado no fim do passo 4, com 635 testes. O que existe: `src/net/wire.ts`, `src/net/transport.ts`,
 `worker/index.ts`, e o `App` aceitando uma sala pela prop `online`.
 
+**Este documento não sobrevive ao fim.** Quando os sete passos fecharem, o que valer a pena
+vai para a seção 6 de `docs/projeto.md` — que é onde o multiplayer é descrito — e
+`docs/plans/` some. Um plano cumprido que fica no repositório vira uma segunda descrição da
+arquitetura, e a segunda é sempre a que ninguém atualiza.
+
+---
+
+## 10. Os passos 5 a 7, detalhados
+
+Detalhar trouxe cinco coisas que as seções anteriores não diziam. Elas estão marcadas
+**novo** e mudam o que os passos são.
+
+### 10.1 Passo 5 — o transporte de rede
+
+`src/net/socket.ts`: um `Transport` sobre `WebSocket` apontando para `/sala/CODE`, com a
+mesma interface que o transporte em memória. O `App` não muda.
+
+O que a implementação precisa resolver:
+
+- **Fila antes de abrir.** O `App` pede o sorteio assim que monta, e o socket ainda não
+  abriu. Enviar antes de `open` perde a mensagem, então ela espera numa fila.
+- **Entrada não confiável.** O que chega é JSON de fora, e o cliente confere a forma antes de
+  passar ao `admits` — do mesmo jeito que `readSaved` confere o `localStorage`. Que o
+  servidor seja nosso não é motivo para acreditar no que chega.
+- **Reconectar não precisa de nada novo.** A sala reentrega o log desde o zero, e o contador
+  de sequência do cliente já está adiante — o guarda de ordem descarta o que ele já aplicou e
+  aceita a partir de onde parou. Isto cai de graça pelo que o passo 3 construiu.
+
+**Novo — o cliente não sabe em que assento sentou.** A sala decide (`blue`, `orange` ou
+espectador) e nunca conta. Hoje quem diz é a prop `online.seat`, e do lado da rede não há
+quem a preencha. Precisa de uma mensagem de boas-vindas, fora do fluxo de ações:
+
+```ts
+type Inbound =
+  | { kind: 'welcome'; seat: Side | 'spectator'; config: RoomConfig }
+  | { kind: 'action'; message: SequencedAction }
+```
+
+**Novo — a configuração da partida tem de viajar.** Tabuleiro, mecânica e a barra de
+avaliação são escolhidos por quem cria. Sem isso na boas-vindas, quem entra joga o que estiver
+no painel dele — e duas telas com tabuleiros diferentes aceitariam lances diferentes, cada uma
+achando que a outra é que trapaceia. A sala guarda a configuração do primeiro a sentar.
+
+**Novo — colisão de código põe um estranho na sua sala.** `idFromName(code)` cria a sala
+implicitamente, então dois jogadores que sorteiem o mesmo código caem na mesma. Com os dois
+assentos ocupados, o terceiro vira espectador de uma partida alheia — silenciosamente.
+
+A saída é barata e usa o que já existe: **quem cria confere a boas-vindas.** Se não recebeu o
+primeiro assento numa sala vazia, sorteia outro código e tenta de novo. Em ~1 milhão de
+combinações isso quase nunca acontece, e "quase nunca" sem tratamento é o tipo de defeito que
+aparece uma vez e não se reproduz.
+
+Falta também a rota `/sala/CODE` no roteador da página e a tela de criar/entrar, e a
+degradação: se a sala não conectar, o modo online avisa e some.
+
+### 10.2 Passo 6 — queda, contagem, reconexão
+
+A sala já sabe quando um socket fecha; falta ela **contar**. Mais uma mensagem fora do fluxo
+de ações — presença não é lance:
+
+```ts
+| { kind: 'peer'; present: boolean }
+```
+
+Na tela: sessenta segundos, os dez últimos em contagem explícita, e um botão. **Nunca
+automático** — se o adversário é um amigo cujo metrô entrou no túnel, esperar é escolha de
+quem não fez nada errado.
+
+O botão não declara o abandono: ele **pede**. O cliente manda `{ kind: 'claim' }`, e a sala
+só emite `{ type: 'abandon', winner }` depois de conferir que o outro está mesmo ausente. É a
+mesma regra do sorteio — presença é conhecimento da sala, e um cliente que declarasse
+reivindicaria vitória a qualquer momento.
+
+Se o adversário volta durante a contagem, a sala manda `present: true` e a contagem morre.
+
+### 10.3 Passo 7 — revanche, espectador e nomes
+
+**Novo — a revanche zera a sequência.** Ela reabre a mesma sala com os lados trocados, e o
+log recomeça. O contador de sequência do cliente **precisa zerar junto**, senão ele fica
+adiante e descarta a partida inteira em silêncio. É a mesma classe do defeito da seção 9.2, e
+vale escrever o teste antes do código.
+
+**Novo — o nome não entra na lista de ações.** É tentador, porque tudo o mais entra. Mas a
+lista é o que `replayMatch` executa, e uma ação que não é lance nem faz parte das regras
+tornaria o replay dependente de metadados de sala. Nome é da conexão, viaja na boas-vindas e
+no `peer`, e some quando a sala some.
+
+**Espectador** já existe na sala (`watch`), e falta na interface: tabuleiro sem controles,
+sem desistir nem propor empate, e um aviso de que se está assistindo. A ausência do `send` é
+a regra — não um botão desabilitado.
+
+**A barra de avaliação** passa a ser da sala, decidida na criação, ligada para os dois ou
+para nenhum. Se um dos lados não baixou a tabela, não aparece para ninguém: meia barra é a
+assimetria que a regra existia para impedir.
+
+### 10.4 O que ainda precisa ser conferido no navegador
+
+- **`new WebSocket()` sob o service worker.** Não deve passar pelo `fetch` do worker, mas
+  isso se confirma abrindo, não lendo.
+- **Latência e queda de verdade.** Nenhum teste em `jsdom` ou Miniflare alcança.
+- **`run_worker_first` em produção.** Valida no `--dry-run`; o comportamento real só o deploy
+  mostra.
+
 ---
 
 ## 9. O que a construção corrigiu
