@@ -150,8 +150,13 @@ que o site consome.
 O mesmo comando serve para rodar localmente antes de um `npm run preview`.
 
 Publicado como **Worker com arquivos estáticos**, configurado em
-`wrangler.jsonc`. Não há `main` ali, e é de propósito: o jogo inteiro roda no
-navegador, então não existe código de servidor nenhum para declarar.
+`wrangler.jsonc`.
+
+Este parágrafo dizia que não havia `main` ali, e que a ausência era a forma mais
+direta de dizer que o jogo inteiro roda no navegador. O passo 9 mudou isso, e o
+que mudou cabe numa frase: existe **uma** sala, ela carimba quem falou e sorteia
+a iniciativa, e não conhece as regras do jogo. Motor, busca, tabelas e desafios
+seguem todos no navegador.
 
 No painel, o *Root directory* é a **raiz do repositório**, não `dist` — `dist`
 é a saída, e não existe no clone.

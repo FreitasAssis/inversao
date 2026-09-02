@@ -27,5 +27,10 @@
   //
   // O motor e o transporte entram porque a sala os usa — e eles são puros de
   // propósito, sem React e sem DOM, que é o que os deixa rodar nos dois lados.
-  "include": ["worker", "src/net", "src/engine", "tests/worker"]
+  "include": ["worker", "src/net", "src/engine", "tests/worker"],
+  // `socket.ts` é o lado navegador do transporte: usa `location` e `WebSocket`
+  // do DOM, e não tem o que fazer no servidor. Excluí-lo é onde essa fronteira
+  // fica escrita — e se alguém importá-lo daqui, o `tsc` segue o import e
+  // reclama, que é exatamente o aviso desejado.
+  "exclude": ["src/net/socket.ts"]
 }
