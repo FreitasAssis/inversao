@@ -38,6 +38,7 @@ import { PIECES } from '../engine/types'
 import type { BoardCode, Piece, Side } from '../engine/types'
 import { admits } from '../net/wire'
 import type { Transport } from '../net/transport'
+import type { RoomConfig, Seat } from '../net/protocol'
 
 /**
  * The root opens on a board that is already playable: Escolha Sorteada on
@@ -64,6 +65,23 @@ const AI_NAME = 'Inversa'
  * fallbacks, but this one wins.
  */
 const COLOUR_PT: Record<Side, string> = { blue: 'Azul', orange: 'Laranja' }
+
+/**
+ * A configuração da partida online, derivada só do que a sala disse.
+ *
+ * O teto de ações e o empate por repetição **não** viajam, e por isso são
+ * constantes aqui: se cada cliente usasse o seu, os dois discordariam sobre
+ * quando a partida vira empate por limite — e a divergência apareceria no lance
+ * 500, sem nada na tela explicando.
+ */
+function onlineConfig(config: RoomConfig): MatchConfig {
+  return {
+    board: config.board,
+    mechanic: config.mechanic,
+    maxActions: 500,
+    drawOnRepetition: false,
+  }
+}
 
 /**
  * A gear. The first attempt read as a *sun*, and the reason was specific:
@@ -123,8 +141,11 @@ export type AppProps = Readonly<{
    * Ausente é o que sempre foi: partida local, contra a IA ou em dois no mesmo
    * aparelho. Presente muda três coisas e nada mais — de onde saem os lances,
    * quem sorteia, e o fato de não haver IA nenhuma para consultar.
+   *
+   * O assento **não** vem por aqui: quem decide é a sala, e ela conta nas
+   * boas-vindas. Se o cliente escolhesse, dois jogadores se declarariam azuis.
    */
-  online?: { transport: Transport; seat: Side } | undefined
+  online?: { transport: Transport } | undefined
 }>
 
 export function App({ drawDelayMs = 550, seed, telegraphMs = 700, online }: AppProps) {
@@ -234,6 +255,16 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700, online }: AppP
       live = false
     }
   }, [board, mechanic])
+  /**
+   * O assento, e a resposta da sala à pergunta que o cliente não sabe sozinho.
+   *
+   * Null enquanto as boas-vindas não chegam — é o estado de "conectando", e
+   * também o que impede jogar antes de saber de que lado se está. Espectador é
+   * um assento como os outros, e nunca é igual a um lado, então tudo o que
+   * depende de `seat === turn` simplesmente não acontece para ele.
+   */
+  const [seat, setSeat] = useState<Seat | null>(null)
+
   const [match, setMatch] = useState<Match>(() => restored?.match ?? startMatch(config))
   const [matchSeed, setMatchSeed] = useState(() => restored?.seed ?? seed ?? Date.now())
 
@@ -245,13 +276,17 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700, online }: AppP
    */
   const opened = useRef(false)
   useEffect(() => {
+    // Online a configuração é da sala, não do painel: ela chega nas
+    // boas-vindas e monta a partida ali. Deixar este efeito rodar aqui apagaria
+    // o log que a sala acabou de entregar, um quadro depois de entregá-lo.
+    if (online !== undefined) return
     if (!opened.current) {
       opened.current = true
       return
     }
     setMatch(startMatch(config))
     setMatchSeed(seed ?? Date.now())
-  }, [config, seed])
+  }, [config, seed, online])
 
   // Kept on every change, thrown away by `writeSaved` itself once the match is
   // over or has not begun: there is no game to come back to in either case.
@@ -441,7 +476,7 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700, online }: AppP
       // Online ninguém aplica o próprio lance: manda, e aplica quando ele volta
       // carimbado. Assim existe uma ordem só, a da sala, em vez de duas que
       // precisam concordar.
-      if (turn(match)?.side !== online.seat) return
+      if (seat === null || turn(match)?.side !== seat) return
       online.transport.send({ kind: 'act', action })
       return
     }
@@ -477,7 +512,24 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700, online }: AppP
   const expected = useRef(0)
   useEffect(() => {
     if (online === undefined) return
-    return online.transport.onReceive((message) => {
+    return online.transport.onReceive((inbound) => {
+      if (inbound.kind === 'welcome') {
+        // A sala manda as boas-vindas **antes** do log, e a partida precisa
+        // nascer aqui, na mesma rajada: as ações que vêm a seguir são
+        // enfileiradas depois desta atualização e caem sobre a partida certa.
+        //
+        // Montar a partida a partir do painel e corrigir depois perderia o log
+        // — o efeito de configuração reiniciaria a partida um quadro adiante.
+        setSeat(inbound.seat)
+        setBoard(inbound.config.board)
+        setMechanic(inbound.config.mechanic)
+        update({ evaluation: inbound.config.evaluation })
+        expected.current = 0
+        setMatch(startMatch(onlineConfig(inbound.config)))
+        return
+      }
+
+      const message = inbound.message
       // Fora do atualizador: React chama atualizador duas vezes em modo estrito,
       // e um contador incrementado lá dentro pularia mensagens.
       const at = expected.current

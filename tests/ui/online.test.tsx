@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { App } from '../../src/ui/App'
 import { createRoom } from '../../src/net/transport'
 import type { Side } from '../../src/engine/types'
+import type { RoomConfig } from '../../src/net/protocol'
 
 /**
  * Duas telas, uma sala, sem rede.
@@ -20,16 +21,18 @@ import type { Side } from '../../src/engine/types'
 /** Sempre a mesma iniciativa, para a partida ser sempre a mesma. */
 const always = (side: Side) => () => side
 
+const CONFIG: RoomConfig = { board: 'dbu', mechanic: 'choice', evaluation: false }
+
 function table(initiative: Side = 'blue') {
-  const room = createRoom(always(initiative))
-  const seats = { blue: room.seat('blue'), orange: room.seat('orange') }
-  const blue = render(<App online={{ transport: seats.blue, seat: 'blue' }} />)
-  const orange = render(<App online={{ transport: seats.orange, seat: 'orange' }} />)
+  const room = createRoom(always(initiative), CONFIG)
+  // Quem senta onde é decisão da sala: o primeiro a entrar é o azul.
+  const seats = { blue: room.join(), orange: room.join() }
+  const blue = render(<App online={{ transport: seats.blue }} />)
+  const orange = render(<App online={{ transport: seats.orange }} />)
   return {
     room,
     /** Reassina o azul, como um efeito que remonta faria. */
-    resubscribe: () =>
-      blue.rerender(<App online={{ transport: seats.blue, seat: 'blue' }} />),
+    resubscribe: () => blue.rerender(<App online={{ transport: seats.blue }} />),
     // Os assentos crus, para um teste poder mandar o que a interface nunca
     // mandaria — que é exatamente o que um cliente malicioso faz.
     seats,
@@ -172,5 +175,79 @@ describe('reassinar', () => {
 
     expect(orange.getByRole('gridcell', { name: /^B1,/ })).toHaveAttribute('data-side', 'blue')
     expect(seen(blue)).toBe(seen(orange))
+  })
+})
+
+describe('o que a sala decide', () => {
+  beforeEach(() => localStorage.clear())
+
+  test('a partida é a da sala, e não a do painel de quem entra', () => {
+    // O painel abre na Escolha Sorteada. Se a configuração não viajasse, quem
+    // entra jogaria outra mecânica — e as duas telas aceitariam lances
+    // diferentes, cada uma achando que a outra é que trapaceia.
+    const room = createRoom(always('blue'), { ...CONFIG, mechanic: 'rotation' })
+    const first = within(render(<App online={{ transport: room.join() }} />).container)
+
+    // No Rodízio ninguém sorteia: a vez já é de alguém, com peça definida.
+    expect(first.getByRole('status')).toHaveTextContent(/vez de/i)
+    expect(first.getByRole('status')).not.toHaveTextContent(/sorteando/i)
+  })
+
+  test('quem assiste não move nada', async () => {
+    // A terceira tela não tem assento. A regra é da sala — o `send` dela não
+    // produz ação nenhuma —, e a tela não precisa de um botão desabilitado.
+    const { room, blue, user } = table('blue')
+    const watcher = within(render(<App online={{ transport: room.join() }} />).container)
+
+    await user.click(watcher.getByRole('gridcell', { name: /^A1,/ }))
+    await user.click(watcher.getByRole('gridcell', { name: /^B1,/ }))
+
+    expect(room.log().filter((message) => message.action.type === 'move')).toHaveLength(0)
+    expect(seen(watcher)).toBe(seen(blue))
+  })
+
+  test('quem assiste vê a partida acontecer', async () => {
+    const { room, blue, user } = table('blue')
+    const watcher = within(render(<App online={{ transport: room.join() }} />).container)
+
+    await user.click(blue.getByRole('gridcell', { name: /^A1,/ }))
+    await user.click(blue.getByRole('gridcell', { name: /^B1,/ }))
+
+    expect(watcher.getByRole('gridcell', { name: /^B1,/ })).toHaveAttribute('data-side', 'blue')
+  })
+})
+
+describe('o que não chega a ser mandado', () => {
+  beforeEach(() => localStorage.clear())
+
+  test('desistir fora da vez não vira mensagem', async () => {
+    // Os botões de desistir e propor empate não são presos à vez na tela — e
+    // localmente não precisam ser, porque o motor lê o lado de quem está na
+    // vez. Online, mandar assim mesmo entulharia o log com uma ação que os dois
+    // clientes vão recusar, e quem chegasse depois teria de reexecutá-la.
+    const { room, orange, user } = table('blue')
+
+    await user.click(orange.getByRole('button', { name: /desistir/i }))
+
+    expect(room.log()).toHaveLength(1)
+    expect(room.log()[0]?.action.type).toBe('draw')
+  })
+
+  test('quem entra no meio vê a partida como ela está', async () => {
+    // O caso que junta tudo: tabuleiro diferente do painel **e** log para
+    // aplicar. Se a configuração da sala não montasse a partida na hora das
+    // boas-vindas, o efeito de configuração a reiniciaria um quadro depois e o
+    // log iria junto.
+    const room = createRoom(always('blue'), { ...CONFIG, board: 'nbn' })
+    const first = within(render(<App online={{ transport: room.join() }} />).container)
+    const user = userEvent.setup()
+
+    await user.click(first.getByRole('gridcell', { name: /^A1,/ }))
+    await user.click(first.getByRole('gridcell', { name: /^B1,/ }))
+
+    const late = within(render(<App online={{ transport: room.join() }} />).container)
+
+    expect(late.getByRole('gridcell', { name: /^B1,/ })).toHaveAttribute('data-side', 'blue')
+    expect(seen(late)).toBe(seen(first))
   })
 })

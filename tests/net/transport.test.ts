@@ -1,125 +1,203 @@
 import { describe, expect, test } from 'vitest'
 import { createRoom } from '../../src/net/transport'
-import type { Room } from '../../src/net/transport'
+import type { Transport } from '../../src/net/transport'
+import type { Inbound, RoomConfig } from '../../src/net/protocol'
 import type { SequencedAction } from '../../src/net/wire'
 import { admits } from '../../src/net/wire'
 import { startMatch } from '../../src/engine/match'
 import type { Side } from '../../src/engine/types'
 
 /**
- * A sala em memória tem a mesma lógica que o Durable Object terá: carimbar
- * autor, numerar e sortear uma vez por rodada. Não é um dublê simplificado —
- * é a coisa, com outro transporte.
+ * A sala em memória tem a mesma lógica que o Durable Object: carimbar autor,
+ * numerar, sentar quem chega e sortear uma vez por rodada. Não é um dublê
+ * simplificado — é a coisa, com outro transporte.
  */
 
 const always = (side: Side) => () => side
+const CONFIG: RoomConfig = { board: 'dbu', mechanic: 'choice', evaluation: false }
+const room = (initiative: Side = 'blue', config = CONFIG) => createRoom(always(initiative), config)
 
-/** Liga os dois assentos e devolve o que cada um recebeu. */
-function connect(room: Room) {
-  const blue = room.seat('blue')
-  const orange = room.seat('orange')
-  const heard: Record<Side, SequencedAction[]> = { blue: [], orange: [] }
-  blue.onReceive((message) => heard.blue.push(message))
-  orange.onReceive((message) => heard.orange.push(message))
-  return { blue, orange, heard }
+/** Entra na sala e anota tudo o que ela disser. */
+function enter(where: ReturnType<typeof room>) {
+  const heard: Inbound[] = []
+  const transport = where.join()
+  const stop = transport.onReceive((message) => heard.push(message))
+  return { transport, heard, stop }
 }
+
+/** Só as ações, que é o que a maioria dos testes olha. */
+const actions = (heard: Inbound[]): SequencedAction[] =>
+  heard.flatMap((message) => (message.kind === 'action' ? [message.message] : []))
+
+const welcome = (heard: Inbound[]) =>
+  heard.find((message) => message.kind === 'welcome') as Extract<Inbound, { kind: 'welcome' }>
+
+const act = (transport: Transport, action: SequencedAction['action']) =>
+  transport.send({ kind: 'act', action })
+
+describe('sentar', () => {
+  test('o primeiro senta de azul e o segundo de laranja', () => {
+    const here = room()
+
+    expect(welcome(enter(here).heard).seat).toBe('blue')
+    expect(welcome(enter(here).heard).seat).toBe('orange')
+  })
+
+  test('do terceiro em diante, assiste', () => {
+    const here = room()
+    enter(here)
+    enter(here)
+
+    expect(welcome(enter(here).heard).seat).toBe('spectator')
+  })
+
+  test('quem entra não escolhe o próprio lado', () => {
+    // Se escolhesse, dois jogadores se declarariam azuis e a checagem de
+    // autoria — que é o que fecha os dois furos do motor — passaria a proteger
+    // nada.
+    const here = room()
+    const first = enter(here)
+    const second = enter(here)
+
+    act(second.transport, { type: 'offerDraw' })
+
+    expect(actions(first.heard)[0]?.from).toBe('orange')
+  })
+
+  test('avisa quem estabeleceu a sala, e só a ele', () => {
+    // É por aqui que quem cria descobre colisão de código: recebendo `false`,
+    // o código já estava em uso e o certo é sortear outro.
+    const here = room()
+
+    expect(welcome(enter(here).heard).first).toBe(true)
+    expect(welcome(enter(here).heard).first).toBe(false)
+  })
+
+  test('conta que partida é esta', () => {
+    // Sem isto quem entra jogaria o que estivesse no painel dele, e duas telas
+    // com tabuleiros diferentes aceitariam lances diferentes — cada uma achando
+    // que a outra é que trapaceia.
+    const here = room('blue', { board: 'nbn', mechanic: 'rotation', evaluation: true })
+
+    expect(welcome(enter(here).heard).config).toEqual({
+      board: 'nbn',
+      mechanic: 'rotation',
+      evaluation: true,
+    })
+  })
+
+  test('o assento volta a ficar livre ao sair, para quem reconecta', () => {
+    const here = room()
+    const first = enter(here)
+    enter(here)
+
+    first.transport.close()
+
+    expect(welcome(enter(here).heard).seat).toBe('blue')
+  })
+})
 
 describe('a sala', () => {
   test('carimba o autor pelo assento, e não pelo que o cliente disse', () => {
-    // É a única coisa que precisa ser inforjável. Sem ela, os dois furos de
-    // autoria voltam: desistir pelo adversário e aceitar o próprio empate.
-    const { blue, heard } = connect(createRoom(always('blue')))
+    const here = room()
+    const first = enter(here)
+    const second = enter(here)
 
-    blue.send({ kind: 'act', action: { type: 'resign' } })
+    act(first.transport, { type: 'resign' })
 
-    expect(heard.orange[0]?.from).toBe('blue')
+    expect(actions(second.heard)[0]?.from).toBe('blue')
   })
 
   test('entrega aos dois lados, inclusive a quem mandou', () => {
     // Quem mandou também aplica pela mensagem que voltou, e não no ato: assim
     // existe uma ordem só, a da sala, e não duas que precisam concordar.
-    const { blue, heard } = connect(createRoom(always('blue')))
+    const here = room()
+    const first = enter(here)
+    const second = enter(here)
 
-    blue.send({ kind: 'act', action: { type: 'offerDraw' } })
+    act(first.transport, { type: 'offerDraw' })
 
-    expect(heard.blue).toHaveLength(1)
-    expect(heard.orange).toHaveLength(1)
+    expect(actions(first.heard)).toHaveLength(1)
+    expect(actions(second.heard)).toHaveLength(1)
   })
 
   test('numera em sequência', () => {
-    const { blue, orange, heard } = connect(createRoom(always('blue')))
+    const here = room()
+    const first = enter(here)
+    const second = enter(here)
 
-    blue.send({ kind: 'act', action: { type: 'offerDraw' } })
-    orange.send({ kind: 'act', action: { type: 'declineDraw' } })
+    act(first.transport, { type: 'offerDraw' })
+    act(second.transport, { type: 'declineDraw' })
 
-    expect(heard.blue.map((message) => message.seq)).toEqual([0, 1])
+    expect(actions(first.heard).map((message) => message.seq)).toEqual([0, 1])
   })
 
   test('sorteia uma vez por rodada, mesmo com os dois pedindo', () => {
-    // Os dois clientes pedem, porque nenhum deles sabe se o outro pediu. Um
-    // segundo sorteio na lista seria uma rodada com dois — e, pior, seria
-    // exatamente o "rolar de novo até gostar" que a seção 2.3 impede.
-    const { blue, orange, heard } = connect(createRoom(always('orange')))
+    // Os dois pedem, porque nenhum sabe se o outro pediu. Um segundo sorteio na
+    // lista seria uma rodada com dois — e, pior, seria o "rolar de novo até
+    // gostar" que a seção 2.3 impede.
+    const here = room('orange')
+    const first = enter(here)
+    const second = enter(here)
 
-    blue.send({ kind: 'draw', round: 0 })
-    orange.send({ kind: 'draw', round: 0 })
+    first.transport.send({ kind: 'draw', round: 0 })
+    second.transport.send({ kind: 'draw', round: 0 })
 
-    expect(heard.blue).toHaveLength(1)
-    expect(heard.blue[0]?.action).toEqual({ type: 'draw', initiative: 'orange' })
+    expect(actions(first.heard)).toHaveLength(1)
+    expect(actions(first.heard)[0]?.action).toEqual({ type: 'draw', initiative: 'orange' })
   })
 
   test('sorteia de novo na rodada seguinte', () => {
-    const { blue, heard } = connect(createRoom((round) => (round === 0 ? 'blue' : 'orange')))
+    const here = createRoom((round) => (round === 0 ? 'blue' : 'orange'), CONFIG)
+    const first = enter(here)
 
-    blue.send({ kind: 'draw', round: 0 })
-    blue.send({ kind: 'draw', round: 1 })
+    first.transport.send({ kind: 'draw', round: 0 })
+    first.transport.send({ kind: 'draw', round: 1 })
 
-    expect(heard.blue.map((m) => (m.action.type === 'draw' ? m.action.initiative : null))).toEqual([
-      'blue',
-      'orange',
-    ])
+    expect(
+      actions(first.heard).map((m) => (m.action.type === 'draw' ? m.action.initiative : null)),
+    ).toEqual(['blue', 'orange'])
   })
 
   test('assina o sorteio como da sala, e não de quem pediu', () => {
-    // Um sorteio carimbado com o lado que pediu seria recusado pelo validador —
-    // e com razão, porque jogador nenhum sorteia.
-    const { blue, heard } = connect(createRoom(always('blue')))
+    const here = room()
+    const first = enter(here)
 
-    blue.send({ kind: 'draw', round: 0 })
+    first.transport.send({ kind: 'draw', round: 0 })
 
-    expect(heard.blue[0]?.from).toBe('server')
+    expect(actions(first.heard)[0]?.from).toBe('server')
   })
 
   test('guarda o log, que é o que quem reconecta recebe', () => {
-    // Reconectar é receber a lista e reexecutar — o mesmo `replayMatch` da
-    // partida salva no aparelho, com a mesma recusa.
-    const room = createRoom(always('blue'))
-    const { blue } = connect(room)
+    const here = room()
+    const first = enter(here)
 
-    blue.send({ kind: 'draw', round: 0 })
-    blue.send({ kind: 'act', action: { type: 'resign' } })
+    first.transport.send({ kind: 'draw', round: 0 })
+    act(first.transport, { type: 'resign' })
 
-    expect(room.log().map((message) => message.action.type)).toEqual(['draw', 'resign'])
+    expect(here.log().map((message) => message.action.type)).toEqual(['draw', 'resign'])
   })
 
   test('para de entregar a quem fechou', () => {
-    const { blue, orange, heard } = connect(createRoom(always('blue')))
+    const here = room()
+    const first = enter(here)
+    const second = enter(here)
 
-    orange.close()
-    blue.send({ kind: 'act', action: { type: 'offerDraw' } })
+    second.transport.close()
+    act(first.transport, { type: 'offerDraw' })
 
-    expect(heard.orange).toHaveLength(0)
-    expect(heard.blue).toHaveLength(1)
+    expect(actions(second.heard)).toHaveLength(0)
+    expect(actions(first.heard)).toHaveLength(1)
   })
 
   test('ignora o que quem fechou tenta mandar', () => {
-    const room = createRoom(always('blue'))
-    const { blue } = connect(room)
+    const here = room()
+    const first = enter(here)
 
-    blue.close()
-    blue.send({ kind: 'act', action: { type: 'resign' } })
+    first.transport.close()
+    act(first.transport, { type: 'resign' })
 
-    expect(room.log()).toHaveLength(0)
+    expect(here.log()).toHaveLength(0)
   })
 })
 
@@ -128,48 +206,15 @@ describe('o sorteio disfarçado de lance', () => {
     // O ataque: `{ kind: 'act', action: { type: 'draw', initiative: 'blue' } }`.
     // Se a sala olhasse o conteúdo e assinasse como sua, o jogador escolheria a
     // própria iniciativa — que é o jogo inteiro da Escolha Sorteada.
-    //
-    // A sala não olha o conteúdo de propósito: ela carimba o assento e pronto.
-    // O validador recusa depois, porque só a sala sorteia.
-    const { blue, heard } = connect(createRoom(always('orange')))
+    const here = room('orange')
+    const first = enter(here)
+    const second = enter(here)
 
-    blue.send({ kind: 'act', action: { type: 'draw', initiative: 'blue' } })
+    act(first.transport, { type: 'draw', initiative: 'blue' })
 
-    expect(heard.orange[0]?.from).toBe('blue')
-    const match = startMatch({ board: 'dbu', mechanic: 'choice' })
-    expect(admits(match, 0, heard.orange[0] as SequencedAction).ok).toBe(false)
-  })
-})
-
-describe('desfazer a assinatura', () => {
-  test('para de entregar a quem se desligou, sem fechar o assento', () => {
-    // Um efeito de React que remonta assina de novo. Sem como se desfazer, o
-    // mesmo lado receberia a mesma mensagem duas vezes.
-    const room = createRoom(always('blue'))
-    const blue = room.seat('blue')
-    const heard: SequencedAction[] = []
-    const stop = blue.onReceive((message) => heard.push(message))
-
-    stop()
-    blue.send({ kind: 'act', action: { type: 'offerDraw' } })
-
-    expect(heard).toHaveLength(0)
-    expect(room.log()).toHaveLength(1)
-  })
-
-  test('desliga só o ouvinte pedido', () => {
-    const room = createRoom(always('blue'))
-    const blue = room.seat('blue')
-    const first: number[] = []
-    const second: number[] = []
-    const stop = blue.onReceive(() => first.push(1))
-    blue.onReceive(() => second.push(1))
-
-    stop()
-    blue.send({ kind: 'act', action: { type: 'offerDraw' } })
-
-    expect(first).toHaveLength(0)
-    expect(second).toHaveLength(1)
+    const sent = actions(second.heard)[0] as SequencedAction
+    expect(sent.from).toBe('blue')
+    expect(admits(startMatch({ board: 'dbu', mechanic: 'choice' }), 0, sent).ok).toBe(false)
   })
 })
 
@@ -177,65 +222,81 @@ describe('quem chega depois', () => {
   test('recebe tudo o que já aconteceu, em ordem', () => {
     // O caso normal, não o excepcional: o segundo jogador sempre entra depois
     // de o primeiro ter criado a sala, e às vezes depois do primeiro sorteio.
-    const room = createRoom(always('blue'))
-    const blue = room.seat('blue')
-    blue.onReceive(() => {})
-    blue.send({ kind: 'draw', round: 0 })
-    blue.send({ kind: 'act', action: { type: 'offerDraw' } })
+    const here = room()
+    const first = enter(here)
+    first.transport.send({ kind: 'draw', round: 0 })
+    act(first.transport, { type: 'offerDraw' })
 
-    const late: SequencedAction[] = []
-    room.seat('orange').onReceive((message) => late.push(message))
+    const late = enter(here)
 
-    expect(late.map((message) => message.action.type)).toEqual(['draw', 'offerDraw'])
-    expect(late.map((message) => message.seq)).toEqual([0, 1])
+    expect(actions(late.heard).map((message) => message.action.type)).toEqual(['draw', 'offerDraw'])
+    expect(actions(late.heard).map((message) => message.seq)).toEqual([0, 1])
+  })
+
+  test('recebe as boas-vindas antes do log', () => {
+    // Ele precisa saber quem é e que partida é esta **antes** de tentar aplicar
+    // qualquer lance — senão aplicaria a lista num tabuleiro que não é o dela.
+    const here = room()
+    const first = enter(here)
+    first.transport.send({ kind: 'draw', round: 0 })
+
+    const late = enter(here)
+
+    expect(late.heard[0]?.kind).toBe('welcome')
   })
 
   test('e segue recebendo o que vier depois', () => {
-    const room = createRoom(always('blue'))
-    const blue = room.seat('blue')
-    blue.onReceive(() => {})
-    blue.send({ kind: 'act', action: { type: 'offerDraw' } })
+    const here = room()
+    const first = enter(here)
+    act(first.transport, { type: 'offerDraw' })
 
-    const late: SequencedAction[] = []
-    room.seat('orange').onReceive((message) => late.push(message))
-    blue.send({ kind: 'act', action: { type: 'resign' } })
+    const late = enter(here)
+    act(first.transport, { type: 'resign' })
 
-    expect(late).toHaveLength(2)
+    expect(actions(late.heard)).toHaveLength(2)
   })
 })
 
 describe('quem assiste', () => {
   test('recebe tudo, do começo', () => {
-    const room = createRoom(always('blue'))
-    const blue = room.seat('blue')
-    blue.onReceive(() => {})
-    blue.send({ kind: 'draw', round: 0 })
+    const here = room()
+    const first = enter(here)
+    enter(here)
+    first.transport.send({ kind: 'draw', round: 0 })
 
-    const watched: SequencedAction[] = []
-    room.watch((message) => watched.push(message))
-    blue.send({ kind: 'act', action: { type: 'resign' } })
+    const watcher = enter(here)
+    act(first.transport, { type: 'resign' })
 
-    expect(watched.map((message) => message.action.type)).toEqual(['draw', 'resign'])
+    expect(actions(watcher.heard).map((message) => message.action.type)).toEqual([
+      'draw',
+      'resign',
+    ])
   })
 
-  test('não tem por onde jogar', () => {
-    // A ausência do `send` é a regra. Um espectador com `send` e um controle
-    // desabilitado em algum lugar seria a regra morando na interface.
-    const room = createRoom(always('blue'))
+  test('não consegue jogar', () => {
+    // A regra mora na sala, e não num botão desabilitado em alguma tela.
+    const here = room()
+    const first = enter(here)
+    enter(here)
+    const watcher = enter(here)
 
-    expect(Object.keys(room.watch(() => {}))).not.toContain('send')
-    expect(typeof room.watch(() => {})).toBe('function')
+    act(watcher.transport, { type: 'resign' })
+
+    expect(actions(first.heard)).toHaveLength(0)
   })
+})
 
-  test('para de receber ao sair', () => {
-    const room = createRoom(always('blue'))
-    const blue = room.seat('blue')
-    const watched: SequencedAction[] = []
-    const stop = room.watch((message) => watched.push(message))
+describe('desfazer a assinatura', () => {
+  test('para de entregar a quem se desligou, sem fechar o assento', () => {
+    // Um efeito de React que remonta assina de novo. Sem como se desfazer, o
+    // mesmo lado receberia a mesma mensagem duas vezes.
+    const here = room()
+    const first = enter(here)
 
-    stop()
-    blue.send({ kind: 'act', action: { type: 'resign' } })
+    first.stop()
+    act(first.transport, { type: 'offerDraw' })
 
-    expect(watched).toHaveLength(0)
+    expect(actions(first.heard)).toHaveLength(0)
+    expect(here.log()).toHaveLength(1)
   })
 })

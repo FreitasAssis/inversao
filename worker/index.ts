@@ -1,15 +1,16 @@
+import { parseConfig } from '../src/net/protocol'
+import type { Inbound, Outbound, RoomConfig } from '../src/net/protocol'
 import { createRoom } from '../src/net/transport'
-import type { Outbound, Room } from '../src/net/transport'
-import type { SequencedAction } from '../src/net/wire'
+import type { Room, Transport } from '../src/net/transport'
 import type { Side } from '../src/engine/types'
 
 /**
  * A sala, como Durable Object (desenho do passo 9, seção 3.1).
  *
  * **Este é o único código de servidor do projeto**, e a sua pequenez é o
- * argumento: ele carimba autor, numera e sorteia uma vez por rodada. Não conhece
- * peças, casas nem regras — o único conhecimento de jogo que tem é um inteiro, o
- * número da rodada.
+ * argumento: ele carimba autor, numera, senta quem chega e sorteia uma vez por
+ * rodada. Não conhece peças, casas nem regras — o único conhecimento de jogo
+ * que tem é um inteiro, o número da rodada.
  *
  * A lógica não mora aqui. Ela é a mesma `createRoom` que os testes de duas telas
  * exercitam sem rede nenhuma, e este arquivo é o adaptador: WebSocket no lugar
@@ -26,63 +27,68 @@ const honestCoin = (): Side => {
 type Env = { SALA: DurableObjectNamespace }
 
 export class Sala {
-  private readonly room: Room = createRoom(honestCoin)
-  /** Quem já está sentado. Terceiro em diante assiste. */
-  private readonly taken = new Set<Side>()
+  /**
+   * Criada na primeira conexão, e não no construtor: quem define a partida é
+   * quem cria a sala, e essa informação chega com ela.
+   */
+  private room: Room | null = null
 
   fetch(request: Request): Response {
     if (request.headers.get('Upgrade') !== 'websocket') {
       return new Response('esperava um websocket', { status: 426 })
     }
 
+    if (this.room === null) {
+      const asked = configFrom(new URL(request.url))
+      if (asked === null) {
+        // Sala vazia e ninguém dizendo que partida é: ou o link é de uma sala
+        // que já se desfez, ou é um código que nunca existiu. Os dois casos são
+        // o mesmo para quem abriu, e "não existe" é a verdade dos dois.
+        return new Response('sala não encontrada', { status: 404 })
+      }
+      this.room = createRoom(honestCoin, asked)
+    }
+
     const pair = new WebSocketPair()
     const [client, server] = [pair[0], pair[1]]
     server.accept()
-
-    const side = (['blue', 'orange'] as const).find((seat) => !this.taken.has(seat))
-    if (side === undefined) {
-      this.watch(server)
-    } else {
-      this.taken.add(side)
-      this.play(server, side)
-    }
+    this.attach(server, this.room.join())
 
     return new Response(null, { status: 101, webSocket: client })
   }
 
-  /** Um assento: recebe tudo e pode mandar. */
-  private play(socket: WebSocket, side: Side): void {
-    const seat = this.room.seat(side)
-    const stop = seat.onReceive((message) => deliver(socket, message))
+  /** Liga um socket a um lugar na sala. Toda a decisão está do outro lado. */
+  private attach(socket: WebSocket, transport: Transport): void {
+    const stop = transport.onReceive((message) => deliver(socket, message))
 
     socket.addEventListener('message', (event) => {
       const outbound = parse(event.data)
       // Descartado em silêncio: um cliente que manda lixo não merece um canal de
       // erro próprio, e responder daria a ele uma forma de sondar a sala.
-      if (outbound !== null) seat.send(outbound)
+      if (outbound !== null) transport.send(outbound)
     })
     socket.addEventListener('close', () => {
       stop()
-      seat.close()
-      // O assento volta a ficar livre, e é isso que faz reconectar funcionar:
-      // quem volta senta no mesmo lugar e recebe o log inteiro.
-      this.taken.delete(side)
+      transport.close()
     })
-  }
-
-  /** Um espectador: recebe tudo e não tem por onde mandar. */
-  private watch(socket: WebSocket): void {
-    const stop = this.room.watch((message) => deliver(socket, message))
-    socket.addEventListener('close', stop)
   }
 }
 
-function deliver(socket: WebSocket, message: SequencedAction): void {
+function deliver(socket: WebSocket, message: Inbound): void {
   try {
     socket.send(JSON.stringify(message))
   } catch {
     // Socket já fechado entre o broadcast e a entrega. Não é erro de ninguém.
   }
+}
+
+/** A configuração de quem cria, que viaja no endereço da própria conexão. */
+function configFrom(url: URL): RoomConfig | null {
+  return parseConfig({
+    board: url.searchParams.get('b'),
+    mechanic: url.searchParams.get('m'),
+    evaluation: url.searchParams.get('e') === '1',
+  })
 }
 
 /**

@@ -1,6 +1,6 @@
 import { SELF } from 'cloudflare:test'
 import { describe, expect, it } from 'vitest'
-import type { SequencedAction } from '../../src/net/wire'
+import type { Inbound } from '../../src/net/protocol'
 
 /**
  * The room, in the runtime that actually runs it.
@@ -21,7 +21,10 @@ import type { SequencedAction } from '../../src/net/wire'
  * worth knowing, because it means green here is not proof there.
  */
 
-type Wire = { socket: WebSocket; heard: SequencedAction[] }
+type Wire = { socket: WebSocket; heard: Inbound[] }
+
+/** The creator carries the configuration in the address; whoever joins does not. */
+const CREATE = 'b=dbu&m=choice&e=0'
 
 /**
  * Um código novo por teste.
@@ -42,19 +45,27 @@ function fresh(): string {
   return code
 }
 
-async function connect(code: string): Promise<Wire> {
-  const response = await SELF.fetch(`https://inversao.test/sala/${code}`, {
+async function connect(code: string, query = ''): Promise<Wire> {
+  const response = await SELF.fetch(`https://inversao.test/sala/${code}?${query}`, {
     headers: { Upgrade: 'websocket' },
   })
   const socket = response.webSocket
-  if (socket === null) throw new Error('the room refused the upgrade')
+  if (socket === null) throw new Error(`the room refused the upgrade: ${response.status}`)
   socket.accept()
-  const heard: SequencedAction[] = []
+  const heard: Inbound[] = []
   socket.addEventListener('message', (event) => {
-    heard.push(JSON.parse(event.data as string) as SequencedAction)
+    heard.push(JSON.parse(event.data as string) as Inbound)
   })
   return { socket, heard }
 }
+
+const actions = (heard: Inbound[]) =>
+  heard.flatMap((message) => (message.kind === 'action' ? [message.message] : []))
+
+const welcome = (heard: Inbound[]) =>
+  heard.find((message) => message.kind === 'welcome') as
+    | Extract<Inbound, { kind: 'welcome' }>
+    | undefined
 
 /** Delivery is asynchronous, so waiting on a count beats waiting on a clock. */
 async function until(reached: () => boolean, what: string): Promise<void> {
@@ -64,6 +75,8 @@ async function until(reached: () => boolean, what: string): Promise<void> {
   }
   throw new Error(`nunca aconteceu: ${what}`)
 }
+
+const send = (wire: Wire, message: unknown) => wire.socket.send(JSON.stringify(message))
 
 describe('the room', () => {
   it('turns away anything that is not a websocket', async () => {
@@ -82,28 +95,81 @@ describe('the room', () => {
     expect(response.status).toBe(404)
   })
 
+  it('turns away a link to a room nobody established', async () => {
+    // A room is memory, not a record: the link outlives it. Whoever opens a
+    // code whose creator is gone gets the truth — there is no such room — and
+    // not a blank board on some default configuration.
+    const response = await SELF.fetch(`https://inversao.test/sala/${fresh()}`, {
+      headers: { Upgrade: 'websocket' },
+    })
+
+    expect(response.status).toBe(404)
+  })
+
+  it('tells each arrival which seat it took', async () => {
+    // The client cannot work this out on its own, and everything it is allowed
+    // to do follows from it.
+    const code = fresh()
+    const first = await connect(code, CREATE)
+    const second = await connect(code)
+
+    await until(() => welcome(first.heard) !== undefined, 'as boas-vindas chegarem')
+    await until(() => welcome(second.heard) !== undefined, 'as boas-vindas chegarem')
+
+    expect(welcome(first.heard)?.seat).toBe('blue')
+    expect(welcome(second.heard)?.seat).toBe('orange')
+  })
+
+  it('tells them which match this is', async () => {
+    const code = fresh()
+    await connect(code, 'b=nbn&m=rotation&e=1')
+    const second = await connect(code)
+
+    await until(() => welcome(second.heard) !== undefined, 'as boas-vindas chegarem')
+
+    expect(welcome(second.heard)?.config).toEqual({
+      board: 'nbn',
+      mechanic: 'rotation',
+      evaluation: true,
+    })
+  })
+
+  it('marks only the arrival that established the room', async () => {
+    // This is how the creator finds a code collision: getting `false` means the
+    // code was already in use, and the fix is to draw another.
+    const code = fresh()
+    const first = await connect(code, CREATE)
+    const second = await connect(code)
+
+    await until(() => welcome(first.heard) !== undefined, 'as boas-vindas chegarem')
+    await until(() => welcome(second.heard) !== undefined, 'as boas-vindas chegarem')
+
+    expect(welcome(first.heard)?.first).toBe(true)
+    expect(welcome(second.heard)?.first).toBe(false)
+  })
+
   it('stamps the author from the seat, never from the message', async () => {
     // The one thing that has to be unforgeable. Without it, `resign` sent on the
     // opponent's turn records that *they* resigned.
     const code = fresh()
-    const first = await connect(code)
+    const first = await connect(code, CREATE)
     const second = await connect(code)
 
-    first.socket.send(JSON.stringify({ kind: 'act', action: { type: 'offerDraw' } }))
-    await until(() => second.heard.length > 0, 'a mensagem chegar ao outro lado')
+    send(first, { kind: 'act', action: { type: 'offerDraw' } })
+    await until(() => actions(second.heard).length > 0, 'a mensagem chegar ao outro lado')
 
-    expect(second.heard[0]?.from).toBe('blue')
+    expect(actions(second.heard)[0]?.from).toBe('blue')
   })
 
   it('seats the second arrival on the other side', async () => {
     const code = fresh()
-    const first = await connect(code)
+    const first = await connect(code, CREATE)
     const second = await connect(code)
 
-    second.socket.send(JSON.stringify({ kind: 'act', action: { type: 'offerDraw' } }))
-    await until(() => first.heard.length > 0, 'a mensagem chegar ao outro lado')
+    send(second, { kind: 'act', action: { type: 'offerDraw' } })
+    await until(() => actions(first.heard).length > 0, 'a mensagem chegar ao outro lado')
 
-    expect(first.heard[0]?.from).toBe('orange')
+    expect(actions(first.heard)[0]?.from).toBe('orange')
   })
 
   it('deals the initiative once, however many ask', async () => {
@@ -111,70 +177,73 @@ describe('the room', () => {
     // draw in the list would be a round with two coins — and, worse, exactly the
     // "roll again until you like it" the design exists to prevent.
     const code = fresh()
-    const first = await connect(code)
+    const first = await connect(code, CREATE)
     const second = await connect(code)
 
-    first.socket.send(JSON.stringify({ kind: 'draw', round: 0 }))
-    second.socket.send(JSON.stringify({ kind: 'draw', round: 0 }))
-    await until(() => first.heard.length > 0, 'o sorteio chegar')
+    send(first, { kind: 'draw', round: 0 })
+    send(second, { kind: 'draw', round: 0 })
+    await until(() => actions(first.heard).length > 0, 'o sorteio chegar')
     await scheduler.wait(20)
 
-    expect(first.heard.filter((message) => message.action.type === 'draw')).toHaveLength(1)
-    expect(first.heard[0]?.from).toBe('server')
+    expect(actions(first.heard).filter((message) => message.action.type === 'draw')).toHaveLength(1)
+    expect(actions(first.heard)[0]?.from).toBe('server')
   })
 
   it('catches a late arrival up on everything already said', async () => {
     // The normal case, not the exceptional one: the second player always joins
     // after the first. It is also the whole of reconnection.
     const code = fresh()
-    const first = await connect(code)
-    first.socket.send(JSON.stringify({ kind: 'draw', round: 0 }))
-    await until(() => first.heard.length > 0, 'o sorteio chegar')
+    const first = await connect(code, CREATE)
+    send(first, { kind: 'draw', round: 0 })
+    await until(() => actions(first.heard).length > 0, 'o sorteio chegar')
 
     const late = await connect(code)
-    await until(() => late.heard.length > 0, 'o log alcançar quem chegou depois')
+    await until(() => actions(late.heard).length > 0, 'o log alcançar quem chegou depois')
 
-    expect(late.heard[0]?.action.type).toBe('draw')
-    expect(late.heard[0]?.seq).toBe(0)
+    expect(late.heard[0]?.kind).toBe('welcome')
+    expect(actions(late.heard)[0]?.action.type).toBe('draw')
+    expect(actions(late.heard)[0]?.seq).toBe(0)
   })
 
   it('lets a third watch, and gives it nothing to play with', async () => {
     const code = fresh()
-    const first = await connect(code)
+    const first = await connect(code, CREATE)
     await connect(code)
     const watcher = await connect(code)
 
-    watcher.socket.send(JSON.stringify({ kind: 'act', action: { type: 'resign' } }))
+    await until(() => welcome(watcher.heard) !== undefined, 'as boas-vindas chegarem')
+    send(watcher, { kind: 'act', action: { type: 'resign' } })
     await scheduler.wait(20)
 
-    expect(first.heard).toHaveLength(0)
+    expect(welcome(watcher.heard)?.seat).toBe('spectator')
+    expect(actions(first.heard)).toHaveLength(0)
   })
 
   it('keeps a different code in a different room', async () => {
     // The code is the object name, and two matches sharing one would deal each
     // other's coins.
-    const here = await connect(fresh())
-    const elsewhere = await connect(fresh())
+    const here = await connect(fresh(), CREATE)
+    const elsewhere = await connect(fresh(), CREATE)
 
-    here.socket.send(JSON.stringify({ kind: 'act', action: { type: 'offerDraw' } }))
+    send(here, { kind: 'act', action: { type: 'offerDraw' } })
     await scheduler.wait(20)
 
-    expect(elsewhere.heard).toHaveLength(0)
+    expect(actions(elsewhere.heard)).toHaveLength(0)
   })
 
   it('ignores a malformed message instead of falling over', async () => {
     // A client that sends rubbish gets no error channel of its own: answering
     // would hand it a way to probe the room.
     const code = fresh()
-    const first = await connect(code)
+    const first = await connect(code, CREATE)
     const second = await connect(code)
 
     second.socket.send('not json at all')
-    second.socket.send(JSON.stringify({ kind: 'act' }))
-    second.socket.send(JSON.stringify({ kind: 'draw', round: 'zero' }))
-    second.socket.send(JSON.stringify({ kind: 'act', action: { type: 'offerDraw' } }))
-    await until(() => first.heard.length > 0, 'a mensagem boa passar')
+    send(second, { kind: 'act' })
+    send(second, { kind: 'draw', round: 'zero' })
+    send(second, { kind: 'act', action: { type: 'offerDraw' } })
+    await until(() => actions(first.heard).length > 0, 'a mensagem boa passar')
 
-    expect(first.heard).toHaveLength(1)
+    expect(actions(first.heard)).toHaveLength(1)
   })
 })
