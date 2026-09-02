@@ -281,12 +281,25 @@ Durable Object, que conexões tenham papel e só algumas tenham assento.
 2. ✅ O resultado `abandonment` nos quatro lugares que ele toca.
 3. ✅ Dois `App` num teste, jogando uma partida inteira pelo transporte local.
 4. ✅ O Durable Object em Miniflare, sem cliente.
-5. O transporte de rede, ligando os dois.
+5. 🔶 O transporte de rede, ligando os dois. **Falta a tela de criar/entrar e a rota.**
 6. Queda, contagem, reconexão.
 7. Revanche, espectador na interface, e o nome de cada lado trafegando.
 
-Parado no fim do passo 4, com 635 testes. O que existe: `src/net/wire.ts`, `src/net/transport.ts`,
-`worker/index.ts`, e o `App` aceitando uma sala pela prop `online`.
+Parado dentro do passo 5, com 683 testes. O que existe:
+
+| arquivo | o que faz |
+|---|---|
+| `src/net/wire.ts` | autoria e ordem, antes do motor |
+| `src/net/protocol.ts` | o envelope e os leitores do que chega |
+| `src/net/transport.ts` | a interface e a sala em memória |
+| `src/net/socket.ts` | o `Transport` sobre WebSocket |
+| `worker/index.ts` | a sala como Durable Object |
+| `src/ui/App.tsx` | aceita uma sala pela prop `online` |
+
+**O que falta para uma partida online acontecer de ponta a ponta:** a rota
+`/sala/CODE`, a tela de criar e entrar, e o `App` sendo montado com um
+`socketTransport` em vez de um da memória. Nada disso mexe no fio — é a casca
+que ainda não existe.
 
 **Este documento não sobrevive ao fim.** Quando os sete passos fecharem, o que valer a pena
 vai para a seção 6 de `docs/projeto.md` — que é onde o multiplayer é descrito — e
@@ -300,7 +313,12 @@ arquitetura, e a segunda é sempre a que ninguém atualiza.
 Detalhar trouxe cinco coisas que as seções anteriores não diziam. Elas estão marcadas
 **novo** e mudam o que os passos são.
 
-### 10.1 Passo 5 — o transporte de rede
+### 10.1 Passo 5 — o transporte de rede ✅ *(menos a tela)*
+
+O que foi construído está nas seções 9.8 a 9.11. Sobra a casca: a rota `/sala/CODE`, a tela
+de criar e entrar, e o `App` sendo montado com um `socketTransport`. O texto abaixo é o
+plano original, mantido porque a parte de colisão de código ainda não foi implementada.
+
 
 `src/net/socket.ts`: um `Transport` sobre `WebSocket` apontando para `/sala/CODE`, com a
 mesma interface que o transporte em memória. O `App` não muda.
@@ -457,7 +475,39 @@ herdando o nome do pacote.
   anterior à que o `wrangler.jsonc` fixa, e o Miniflare avisa e recua. Verde aqui não é prova
   lá.
 
-### 9.8 A sala não hiberna, e isso é uma escolha
+### 9.8 A partida online nasce dentro das boas-vindas
+
+As boas-vindas e o log chegam na **mesma rajada**. A primeira ideia foi montar a partida a
+partir do painel e corrigi-la quando a configuração chegasse — e isso perde o log: o efeito
+que reinicia a partida ao mudar tabuleiro rodaria um quadro adiante e jogaria fora o que a
+sala acabou de entregar.
+
+A partida passa a nascer dentro do tratamento das boas-vindas, e as ações seguintes, que já
+estão enfileiradas atrás dela, caem sobre a partida certa. O efeito de configuração local não
+roda em partida online: ali a configuração é da sala.
+
+### 9.9 O teto de ações não viaja, então é constante
+
+`maxActions` e o empate por repetição fazem parte de `MatchConfig` e mudam o resultado. Se
+cada cliente usasse o seu, os dois discordariam sobre quando a partida vira empate por
+limite — e a divergência apareceria no lance 500, sem nada na tela explicando.
+
+Eles não estão em `RoomConfig`: são constantes derivadas dela, iguais nos dois lados por
+construção.
+
+### 9.10 Um link sobrevive à sala, e a sala diz isso
+
+A sala é memória, não registro. Quem abre um código cujo criador já saiu recebe **404**, e
+não um tabuleiro em branco numa configuração padrão — que seria a resposta errada mais
+convincente possível.
+
+### 9.11 A fronteira navegador/servidor está escrita no tsconfig
+
+`src/net/socket.ts` usa `location` e o `WebSocket` do DOM, e está **excluído** do
+`tsconfig.worker.json`. Não é arrumação: se alguém importá-lo do servidor, o `tsc` segue o
+import e reclama, que é exatamente o aviso desejado.
+
+### 9.12 A sala não hiberna, e isso é uma escolha
 
 O log vive na memória do Durable Object, que permanece vivo enquanto houver socket aberto. A
 API de hibernação reduziria custo de duração, mas descartaria o estado em memória — e o log é
