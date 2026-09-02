@@ -276,11 +276,93 @@ Durable Object, que conexões tenham papel e só algumas tenham assento.
 
 ## 8. Ordem de construção
 
-1. `Transport` e o validador de transporte, com o transporte local. Fecha os dois furos da
+1. ✅ `Transport` e o validador de transporte, com o transporte local. Fecha os dois furos da
    seção 2 antes de existir rede para explorá-los.
-2. O resultado `abandonment` nos quatro lugares que ele toca.
-3. Dois `App` num teste, jogando uma partida inteira pelo transporte local.
-4. O Durable Object em Miniflare, sem cliente.
+2. ✅ O resultado `abandonment` nos quatro lugares que ele toca.
+3. ✅ Dois `App` num teste, jogando uma partida inteira pelo transporte local.
+4. ✅ O Durable Object em Miniflare, sem cliente.
 5. O transporte de rede, ligando os dois.
 6. Queda, contagem, reconexão.
-7. Revanche e espectador.
+7. Revanche, espectador na interface, e o nome de cada lado trafegando.
+
+Parado no fim do passo 4, com 635 testes. O que existe: `src/net/wire.ts`, `src/net/transport.ts`,
+`worker/index.ts`, e o `App` aceitando uma sala pela prop `online`.
+
+---
+
+## 9. O que a construção corrigiu
+
+Registrado aqui porque cada item é uma coisa que este documento afirmava e que se mostrou
+errada ou incompleta ao virar código.
+
+### 9.1 Quem chega depois recebe o log — e esse é o caso normal
+
+O documento tratava a entrega do log como mecanismo de **reconexão**. É mais que isso: o
+segundo jogador *sempre* entra depois do primeiro, às vezes depois do primeiro sorteio. Sem
+reentregar, ele abriria com o tabuleiro em branco enquanto o outro já tinha a rodada em
+curso. Assinar é receber a lista, sempre.
+
+### 9.2 A sequência segue a sala, não a lista de ações
+
+A primeira implementação usava `actions.length` como número esperado, com o raciocínio de que
+toda mensagem aceita acrescenta exatamente uma ação. Verdadeiro, e insuficiente: **a sala
+numera tudo o que transmite, inclusive o que os clientes recusam**, porque ela não conhece as
+regras. Uma única tentativa de trapaça dessincronizava a sequência para sempre e travava a
+partida — o oposto do pretendido, que era trapaça não ter efeito.
+
+O contador vive numa ref e acompanha a sala.
+
+### 9.3 O sorteio é idempotente, e não repetido
+
+A seção 4.3 dizia que a sala "responde ao primeiro e repete a resposta ao segundo".
+Reemitir poria **dois sorteios na mesma rodada** da lista de ações. Já corrigido no texto.
+
+### 9.4 `abandon` carrega o vencedor
+
+Ao contrário de `resign`, ele não é derivável de quem está na vez: quem some costuma sumir
+fora da vez, e a rodada pode estar esperando o sorteio, onde não há vez nenhuma. Ele também
+precisa ser tratado **antes** da guarda "responda a proposta de empate primeiro", senão sumir
+durante uma proposta trava a partida para quem ficou.
+
+### 9.5 O `single-page-application` engoliria o WebSocket
+
+`not_found_handling: single-page-application` responde o `index.html` para todo endereço sem
+arquivo correspondente — inclusive o pedido de upgrade. Sem
+`assets.run_worker_first: ["/sala/*"]` o cliente receberia HTML em vez de conexão. Há teste
+fixando isso.
+
+### 9.6 Dois mundos de tipo, e dois de teste
+
+`lib: DOM` e os tipos do Workers definem `WebSocket` de formas incompatíveis, então o
+servidor tem `tsconfig.worker.json` próprio — sem ele o `worker/` ficava fora do `include` e
+era publicado **sem checagem de tipo nenhuma**. Os testes da sala saem do tsconfig principal
+pelo mesmo motivo: usam `scheduler`, que é global do Workers.
+
+Igualmente, `jsdom` e o runtime do Workers não convivem num processo: são dois projetos de
+vitest reunidos por `vitest.workspace.ts`, e cada um precisa de `name` próprio ou colidem
+herdando o nome do pacote.
+
+### 9.7 Limitações conhecidas do ambiente de teste
+
+- **`@cloudflare/vitest-pool-workers` está preso em `0.12.21`**, a última versão que aceita
+  vitest 2. As seguintes exigem vitest 4, o que seria um salto de duas versões maiores sobre
+  635 testes — trabalho a fazer um dia, não junto com isto.
+- **`isolatedStorage: false`**, porque a variante SQLite do Durable Object quebra com ele
+  nesta versão. A sala não usa `state.storage`, então nada se perde — mas o estado sobrevive
+  entre testes, e por isso cada teste gera o próprio código de sala.
+- **O `workerd` local está atrás da produção.** Ele para numa data de compatibilidade
+  anterior à que o `wrangler.jsonc` fixa, e o Miniflare avisa e recua. Verde aqui não é prova
+  lá.
+
+### 9.8 A sala não hiberna, e isso é uma escolha
+
+O log vive na memória do Durable Object, que permanece vivo enquanto houver socket aberto. A
+API de hibernação reduziria custo de duração, mas descartaria o estado em memória — e o log é
+justamente o que faz reconectar funcionar.
+
+Conta grosseira sobre os ~390 mil GB-s gratuitos por mês: a ~128 MB por objeto, dá cerca de
+870 horas de sala de pé, ou algo como **2.600 partidas de vinte minutos por mês**. Ordens de
+grandeza acima do que um portfólio precisa.
+
+Se um dia precisar hibernar, o caminho é persistir o log em `state.storage` — e aí ele deixa
+de ser opaco de graça, porque passa a custar escrita por lance.
