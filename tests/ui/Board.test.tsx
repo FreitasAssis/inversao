@@ -517,6 +517,23 @@ describe('a tela de quem espera', () => {
     expect(container.querySelectorAll('[data-legal]').length).toBeGreaterThan(0)
   })
 
+  test('não diz que o adversário passa quando ele tem para onde ir', () => {
+    // `stuck` saía dos destinos **marcados**, e a tela de quem espera não marca
+    // nenhum — então toda vez do adversário lia como peça presa. Poder mover e
+    // dizer que a peça está travada são perguntas diferentes: uma é fato da
+    // posição, a outra é escolha de exibição.
+    render(<Board match={rodizio()} onPlay={() => {}} viewer="orange" />)
+
+    expect(screen.getByRole('status')).not.toHaveTextContent(/passa/i)
+    expect(screen.getByRole('status')).toHaveTextContent(/vez de azul/i)
+  })
+
+  test('diz que o adversário passa quando ele está mesmo preso', () => {
+    render(<Board match={boxed()} onPlay={() => {}} viewer="orange" />)
+
+    expect(screen.getByRole('status')).toHaveTextContent(/passa/i)
+  })
+
   test('não oferece passar pelo adversário', () => {
     render(<Board match={boxed()} onPlay={() => {}} viewer="orange" />)
 

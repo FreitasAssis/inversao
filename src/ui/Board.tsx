@@ -153,13 +153,28 @@ export function Board({
   const mine = viewer === undefined || viewer === view.mover
   const namer = view.awaitingName && mine ? view.mover : null
   const active = view.active ?? (namer && named ? pieceOf(match, namer, named) : null)
-  const legal =
-    namer && named
-      ? legalMoves(match.config.board, match.placement, namer, named)
-      : mine
-        ? view.legal
-        : []
-  const stuck = active !== null && legal.length === 0
+  /**
+   * Para onde a peça da vez **pode** ir. Fato da posição, e a mesma resposta em
+   * qualquer tela.
+   */
+  const reachable =
+    namer && named ? legalMoves(match.config.board, match.placement, namer, named) : view.legal
+
+  /**
+   * Para onde esta tela **marca** que dá para ir. Escolha de exibição: um
+   * destino marcado é um convite a tocar, e tocar na tela de quem espera não
+   * faz nada.
+   */
+  const legal = mine ? reachable : []
+
+  /**
+   * Sai do fato, nunca do que se marca.
+   *
+   * Saía de `legal`, e como a tela de quem espera não marca nada, toda vez do
+   * adversário lia como peça presa: "Laranja passa: o quadrado não tem lance
+   * legal" enquanto o quadrado tinha o tabuleiro inteiro à frente.
+   */
+  const stuck = active !== null && reachable.length === 0
 
   /**
    * A piece stays nameable even after one has been picked. Naming is not
