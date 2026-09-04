@@ -22,8 +22,11 @@ import { roomPath } from './routes'
 
 type Status =
   | { at: 'connecting' }
-  /** A sala respondeu, e daqui em diante quem manda é o `App`. */
-  | { at: 'playing'; seat: Seat; config: RoomConfig }
+  /** Sentado, e sozinho. O `App` não monta aqui — e é isso que impede a
+      partida de começar antes de haver com quem jogar. */
+  | { at: 'waiting'; seat: Seat }
+  /** Os dois assentos ocupados: daqui em diante quem manda é o `App`. */
+  | { at: 'playing'; seat: Seat }
   /** O socket fechou antes de qualquer resposta: sala inexistente ou desfeita. */
   | { at: 'gone' }
 
@@ -95,9 +98,28 @@ export function Room({ code, connect, search, origin }: RoomProps) {
       // O endereço limpo é o que se compartilha, e trocá-lo aqui é o que faz
       // recarregar significar "entrar" em vez de "criar de novo".
       globalThis.history?.replaceState(null, '', roomPath(here))
-      setStatus({ at: 'playing', seat: message.seat, config: message.config })
+      setStatus({ at: 'waiting', seat: message.seat })
     })
   }, [transport, asked, here])
+
+  /**
+   * A partida só começa com os dois lá.
+   *
+   * Sem isto, quem cria via o tabuleiro na hora — o sorteio era pedido na
+   * montagem, a sala sorteava, e dava para jogar no vazio. Segurar o `App` fora
+   * da tela segura o sorteio junto, porque é ele quem pede.
+   *
+   * **Só de ida.** Perder o adversário depois não desmonta o `App`: isso
+   * jogaria a partida fora, e uma queda no meio é assunto do passo 6.
+   */
+  useEffect(
+    () =>
+      transport.onReceive((message) => {
+        if (message.kind !== 'peer' || !message.present) return
+        setStatus((now) => (now.at === 'waiting' ? { at: 'playing', seat: now.seat } : now))
+      }),
+    [transport],
+  )
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -111,21 +133,41 @@ export function Room({ code, connect, search, origin }: RoomProps) {
   useEffect(() => () => transport.close(), [transport])
 
   if (status.at === 'gone') return <Gone />
-  if (status.at === 'connecting') return <Waiting code={here} creating={asked !== null} tries={collisions} />
-  return <App online={{ transport }} />
+  if (status.at === 'playing') return <App online={{ transport }} />
+  return (
+    <Waiting
+      code={here}
+      seat={status.at === 'waiting' ? status.seat : null}
+      tries={collisions}
+    />
+  )
 }
 
-function Waiting({ code, creating, tries }: { code: string; creating: boolean; tries: number }) {
+function Waiting({
+  code,
+  seat,
+  tries,
+}: {
+  code: string
+  /** Null enquanto a sala não respondeu. */
+  seat: Seat | null
+  tries: number
+}) {
   return (
     <main className="app room">
       <Mark />
-      <h1>{creating ? 'Sala criada' : 'Entrando'}</h1>
+      <h1>{seat === null ? 'Conectando' : 'Esperando o adversário'}</h1>
       <p className="room-code">{code}</p>
-      {creating && <Invitation code={code} />}
-      {tries > 0 && (
+
+      {seat !== null && seat !== 'spectator' && <Invitation code={code} />}
+      {seat === 'spectator' && (
         <p className="lead">
-          O código anterior já estava em uso, então sorteamos outro.
+          Você vai assistir. A partida aparece assim que os dois jogadores estiverem aqui.
         </p>
+      )}
+
+      {tries > 0 && (
+        <p className="lead">O código anterior já estava em uso, então sorteamos outro.</p>
       )}
     </main>
   )
@@ -136,6 +178,7 @@ function Invitation({ code }: { code: string }) {
   return (
     <p className="lead">
       Mande este endereço para quem vai jogar: <strong>{link}</strong>
+      <br />O tabuleiro aparece quando a outra pessoa entrar.
     </p>
   )
 }

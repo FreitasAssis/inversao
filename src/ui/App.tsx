@@ -530,6 +530,10 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700, online }: AppP
         return
       }
 
+      // Presença não é lance: quem cuida dela é a tela da sala, e o `App` não
+      // tem o que fazer com ela enquanto a partida está de pé.
+      if (inbound.kind !== 'action') return
+
       const message = inbound.message
       // Fora do atualizador: React chama atualizador duas vezes em modo estrito,
       // e um contador incrementado lá dentro pularia mensagens.

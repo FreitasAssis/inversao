@@ -40,6 +40,16 @@ export type Inbound =
    */
   | { kind: 'welcome'; seat: Seat; config: RoomConfig; first: boolean }
   | { kind: 'action'; message: SequencedAction }
+  /**
+   * Se os dois assentos estão ocupados.
+   *
+   * Não é lance, então não entra na lista de ações: `replayMatch` não pode
+   * depender de quem estava conectado. Chega ao assinar e a cada mudança.
+   *
+   * Serve a duas coisas com um sinal só — a tela de espera aguarda ele virar
+   * verdadeiro, e a queda do adversário é ele virando falso.
+   */
+  | { kind: 'peer'; present: boolean }
 
 export type Outbound =
   | { kind: 'act'; action: Action }
@@ -89,6 +99,12 @@ export function parseInbound(raw: unknown): Inbound | null {
     if (settled === null || typeof first !== 'boolean') return null
     if (seat !== 'blue' && seat !== 'orange' && seat !== 'spectator') return null
     return { kind: 'welcome', seat, config: settled, first }
+  }
+
+  if (message.kind === 'peer') {
+    const { present } = value as { present?: unknown }
+    if (typeof present !== 'boolean') return null
+    return { kind: 'peer', present }
   }
 
   if (message.kind === 'action') {

@@ -23,10 +23,17 @@ const always = (side: Side) => () => side
 
 const CONFIG: RoomConfig = { board: 'dbu', mechanic: 'choice', evaluation: false }
 
+/** A sala pode recusar quando está lotada, e nestes testes ela nunca está. */
+function seatIn(where: ReturnType<typeof createRoom>) {
+  const transport = where.join()
+  if (transport === null) throw new Error('a sala recusou a conexão')
+  return transport
+}
+
 function table(initiative: Side = 'blue') {
   const room = createRoom(always(initiative), CONFIG)
   // Quem senta onde é decisão da sala: o primeiro a entrar é o azul.
-  const seats = { blue: room.join(), orange: room.join() }
+  const seats = { blue: seatIn(room), orange: seatIn(room) }
   const blue = render(<App online={{ transport: seats.blue }} />)
   const orange = render(<App online={{ transport: seats.orange }} />)
   return {
@@ -186,7 +193,7 @@ describe('o que a sala decide', () => {
     // entra jogaria outra mecânica — e as duas telas aceitariam lances
     // diferentes, cada uma achando que a outra é que trapaceia.
     const room = createRoom(always('blue'), { ...CONFIG, mechanic: 'rotation' })
-    const first = within(render(<App online={{ transport: room.join() }} />).container)
+    const first = within(render(<App online={{ transport: seatIn(room) }} />).container)
 
     // No Rodízio ninguém sorteia: a vez já é de alguém, com peça definida.
     expect(first.getByRole('status')).toHaveTextContent(/vez de/i)
@@ -197,7 +204,7 @@ describe('o que a sala decide', () => {
     // A terceira tela não tem assento. A regra é da sala — o `send` dela não
     // produz ação nenhuma —, e a tela não precisa de um botão desabilitado.
     const { room, blue, user } = table('blue')
-    const watcher = within(render(<App online={{ transport: room.join() }} />).container)
+    const watcher = within(render(<App online={{ transport: seatIn(room) }} />).container)
 
     await user.click(watcher.getByRole('gridcell', { name: /^A1,/ }))
     await user.click(watcher.getByRole('gridcell', { name: /^B1,/ }))
@@ -208,7 +215,7 @@ describe('o que a sala decide', () => {
 
   test('quem assiste vê a partida acontecer', async () => {
     const { room, blue, user } = table('blue')
-    const watcher = within(render(<App online={{ transport: room.join() }} />).container)
+    const watcher = within(render(<App online={{ transport: seatIn(room) }} />).container)
 
     await user.click(blue.getByRole('gridcell', { name: /^A1,/ }))
     await user.click(blue.getByRole('gridcell', { name: /^B1,/ }))
@@ -239,13 +246,13 @@ describe('o que não chega a ser mandado', () => {
     // boas-vindas, o efeito de configuração a reiniciaria um quadro depois e o
     // log iria junto.
     const room = createRoom(always('blue'), { ...CONFIG, board: 'nbn' })
-    const first = within(render(<App online={{ transport: room.join() }} />).container)
+    const first = within(render(<App online={{ transport: seatIn(room) }} />).container)
     const user = userEvent.setup()
 
     await user.click(first.getByRole('gridcell', { name: /^A1,/ }))
     await user.click(first.getByRole('gridcell', { name: /^B1,/ }))
 
-    const late = within(render(<App online={{ transport: room.join() }} />).container)
+    const late = within(render(<App online={{ transport: seatIn(room) }} />).container)
 
     expect(late.getByRole('gridcell', { name: /^B1,/ })).toHaveAttribute('data-side', 'blue')
     expect(seen(late)).toBe(seen(first))

@@ -25,7 +25,11 @@ const honestCoin = (): Side => {
   return ((byte as number) & 1) === 0 ? 'blue' : 'orange'
 }
 
-type Env = { SALA: DurableObjectNamespace }
+type Env = {
+  SALA: DurableObjectNamespace
+  /** Os arquivos do site. O Worker os serve porque está na frente deles. */
+  ASSETS: { fetch(request: Request): Promise<Response> }
+}
 
 export class Sala {
   /**
@@ -50,10 +54,18 @@ export class Sala {
       this.room = createRoom(honestCoin, asked)
     }
 
+    const transport = this.room.join()
+    if (transport === null) {
+      // Sala lotada. O teto é folgado e existe só por segurança: sem ele, um
+      // código conhecido é tudo o que alguém precisa para abrir conexões até
+      // doer, e nada disso pede autenticação.
+      return new Response('sala cheia', { status: 503 })
+    }
+
     const pair = new WebSocketPair()
     const [client, server] = [pair[0], pair[1]]
     server.accept()
-    this.attach(server, this.room.join())
+    this.attach(server, transport)
 
     return new Response(null, { status: 101, webSocket: client })
   }
@@ -120,6 +132,12 @@ function parse(data: unknown): Outbound | null {
 /** O código da sala é o nome do objeto: mesmo código, mesma instância. */
 export default {
   fetch(request: Request, env: Env): Promise<Response> | Response {
+    // Quem chega sem pedir upgrade é um navegador abrindo o endereço, e o que
+    // ele quer é a página. O `run_worker_first` põe este Worker na frente dos
+    // arquivos para o WebSocket poder existir, e sem esta linha o preço disso
+    // seria `/sala/K3M9` responder "esperava um websocket" em texto puro.
+    if (request.headers.get('Upgrade') !== 'websocket') return env.ASSETS.fetch(request)
+
     const code = new URL(request.url).pathname.replace(/^\/sala\//, '').toUpperCase()
     // A mesma lista que gera. Estiveram separadas, e discordavam: este teste
     // era `[A-Z2-9]{4}`, que aceita `O`, `I` e `L` — símbolos que o gerador

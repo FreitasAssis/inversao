@@ -23,7 +23,7 @@ function wire(sala: Sala) {
   const opened: string[] = []
   const connect = ({ code }: { code: string }): Transport => {
     opened.push(code)
-    return sala.join()
+    return seatIn(sala)
   }
   return { connect, opened }
 }
@@ -37,16 +37,68 @@ const silent = (): Transport => ({
 
 const always = (side: Side) => () => side
 
+/** A sala pode recusar quando lotada, e nestes testes ela nunca está. */
+function seatIn(sala: Sala): Transport {
+  const transport = sala.join()
+  if (transport === null) throw new Error('a sala recusou a conexão')
+  return transport
+}
+
 describe('entrando numa sala', () => {
   beforeEach(() => localStorage.clear())
 
-  test('mostra o tabuleiro quando a sala responde', () => {
+  test('espera enquanto está sozinho, em vez de abrir o tabuleiro', () => {
+    // Sem isto, quem cria via o tabuleiro na hora: o sorteio era pedido na
+    // montagem, a sala sorteava, e dava para jogar no vazio.
     const sala = createRoom(always('blue'), CONFIG)
     const { connect } = wire(sala)
 
     render(<Room code="K3M9" connect={connect} search="" />)
 
+    expect(screen.queryByRole('grid', { name: /tabuleiro/i })).toBeNull()
+    expect(screen.getByRole('heading', { name: /esperando o adversário/i })).toBeInTheDocument()
+  })
+
+  test('não sorteia nada enquanto está sozinho', () => {
+    // Segurar o `App` fora da tela segura o sorteio junto, porque é ele quem
+    // pede — e um sorteio gasto antes de haver adversário seria uma rodada
+    // perdida na lista de ações.
+    const sala = createRoom(always('blue'), CONFIG)
+    const { connect } = wire(sala)
+
+    render(<Room code="K3M9" connect={connect} search="" />)
+
+    expect(sala.log()).toHaveLength(0)
+  })
+
+  test('abre o tabuleiro quando o segundo jogador entra', () => {
+    const sala = createRoom(always('blue'), CONFIG)
+    const { connect } = wire(sala)
+    render(<Room code="K3M9" connect={connect} search="" />)
+
+    act(() => {
+      seatIn(sala)
+    })
+
     expect(screen.getByRole('grid', { name: /tabuleiro/i })).toBeInTheDocument()
+  })
+
+  test('não volta à espera quando o adversário sai', () => {
+    // Voltar desmontaria o `App` e a partida iria junto — a lista de ações
+    // vive nele. Perder o adversário no meio é assunto do passo 6, e a resposta
+    // lá é uma contagem por cima do tabuleiro, nunca trocar de tela.
+    const sala = createRoom(always('blue'), CONFIG)
+    const { connect } = wire(sala)
+    render(<Room code="K3M9" connect={connect} search="" />)
+    let other: Transport | null = null
+    act(() => {
+      other = seatIn(sala)
+    })
+
+    act(() => (other as unknown as Transport).close())
+
+    expect(screen.getByRole('grid', { name: /tabuleiro/i })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: /esperando/i })).toBeNull()
   })
 
   test('joga a partida da sala, e não a do painel de quem entra', () => {
@@ -56,6 +108,9 @@ describe('entrando numa sala', () => {
     const { connect } = wire(sala)
 
     render(<Room code="K3M9" connect={connect} search="" />)
+    act(() => {
+      seatIn(sala)
+    })
 
     expect(screen.getByRole('status')).not.toHaveTextContent(/sorteando/i)
   })
@@ -71,7 +126,7 @@ describe('entrando numa sala', () => {
         search=""
         connect={(joining) => {
           asked = joining.config
-          return sala.join()
+          return seatIn(sala)
         }}
       />,
     )
@@ -92,7 +147,7 @@ describe('criando uma sala', () => {
         search={CREATING}
         connect={(joining) => {
           asked = joining.config
-          return sala.join()
+          return seatIn(sala)
         }}
       />,
     )
@@ -106,7 +161,7 @@ describe('criando uma sala', () => {
     // ~900 mil combinações é raro — e raro sem tratamento é o defeito que
     // aparece uma vez e não se reproduz.
     const taken = createRoom(always('blue'), CONFIG)
-    taken.join() // alguém já estabeleceu esta sala
+    seatIn(taken) // alguém já estabeleceu esta sala
     const free = createRoom(always('blue'), CONFIG)
     const { connect, opened } = (() => {
       const seen: string[] = []
@@ -114,7 +169,7 @@ describe('criando uma sala', () => {
         opened: seen,
         connect: ({ code }: { code: string }) => {
           seen.push(code)
-          return seen.length === 1 ? taken.join() : free.join()
+          return seen.length === 1 ? seatIn(taken) : seatIn(free)
         },
       }
     })()
@@ -127,13 +182,27 @@ describe('criando uma sala', () => {
     expect(opened[1]).not.toBe('K3M9')
   })
 
-  test('mostra o endereço para mandar a alguém', () => {
+  test('mostra o endereço para mandar a alguém, e o mantém até o outro chegar', () => {
+    // O link é a razão de a tela existir. Ele ficava escondido atrás de um
+    // estado que durava milissegundos, então quem criava nunca o via.
     const sala = createRoom(always('blue'), CONFIG)
-    // Ninguém do outro lado ainda, então a tela de espera é o que aparece.
-    render(<Room code="K3M9" search={CREATING} connect={() => silent()} />)
+    const { connect } = wire(sala)
+
+    render(<Room code="K3M9" search={CREATING} connect={connect} />)
 
     expect(screen.getByText(/\/sala\/K3M9/)).toBeInTheDocument()
-    expect(sala.log()).toHaveLength(0)
+  })
+
+  test('some com o convite quando a partida começa', () => {
+    const sala = createRoom(always('blue'), CONFIG)
+    const { connect } = wire(sala)
+    render(<Room code="K3M9" search={CREATING} connect={connect} />)
+
+    act(() => {
+      seatIn(sala)
+    })
+
+    expect(screen.queryByText(/mande este endereço/i)).toBeNull()
   })
 })
 
@@ -148,7 +217,10 @@ describe('uma sala que não existe', () => {
     // uma partida em andamento trocaria o tabuleiro por "sala não encontrada"
     // quatro segundos depois de tudo ter dado certo.
     const sala = createRoom(always('blue'), CONFIG)
-    render(<Room code="K3M9" search="" connect={() => sala.join()} />)
+    render(<Room code="K3M9" search="" connect={() => seatIn(sala)} />)
+    act(() => {
+      seatIn(sala)
+    })
 
     act(() => vi.advanceTimersByTime(30_000))
 

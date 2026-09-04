@@ -79,10 +79,14 @@ async function until(reached: () => boolean, what: string): Promise<void> {
 const send = (wire: Wire, message: unknown) => wire.socket.send(JSON.stringify(message))
 
 describe('the room', () => {
-  it('turns away anything that is not a websocket', async () => {
+  it('serves the page to a browser opening the address', async () => {
+    // `run_worker_first` puts this Worker in front of the files so the upgrade
+    // can reach the room. The price, unpaid, was `/sala/K3M9` answering
+    // "esperava um websocket" in plain text — the page never loading at all.
     const response = await SELF.fetch(`https://inversao.test/sala/${fresh()}`)
 
-    expect(response.status).toBe(426)
+    expect(response.status).toBe(200)
+    expect(await response.text()).toContain('<div id="root">')
   })
 
   it('turns away a code that is not a code', async () => {

@@ -19,6 +19,12 @@
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Sala"] }],
 
   "assets": {
+    // O Worker precisa alcançar os arquivos para servir a página: sem isto,
+    // navegar para `/sala/K3M9` bate no Worker — por causa do
+    // `run_worker_first` abaixo — e recebe "esperava um websocket" em texto
+    // puro. A página nunca carregaria.
+    "binding": "ASSETS",
+
     // A saída do Vite. O `npm run build` a produz e o `make publica`, rodado
     // antes, põe as cinco tabelas dentro de `public/data` para que ela as leve
     // junto.

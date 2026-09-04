@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { createRoom } from '../../src/net/transport'
+import { createRoom, ROOM_LIMIT } from '../../src/net/transport'
 import type { Transport } from '../../src/net/transport'
 import type { Inbound, RoomConfig } from '../../src/net/protocol'
 import type { SequencedAction } from '../../src/net/wire'
@@ -21,6 +21,7 @@ const room = (initiative: Side = 'blue', config = CONFIG) => createRoom(always(i
 function enter(where: ReturnType<typeof room>) {
   const heard: Inbound[] = []
   const transport = where.join()
+  if (transport === null) throw new Error('a sala recusou a conexão')
   const stop = transport.onReceive((message) => heard.push(message))
   return { transport, heard, stop }
 }
@@ -298,5 +299,47 @@ describe('desfazer a assinatura', () => {
 
     expect(actions(first.heard)).toHaveLength(0)
     expect(here.log()).toHaveLength(1)
+  })
+})
+
+describe('o teto de conexões', () => {
+  test('aceita os dois jogadores e um bando de espectadores', () => {
+    // Não é limite de produto: assistir é bom, e ninguém bate nisto jogando.
+    const here = room()
+
+    for (let at = 0; at < ROOM_LIMIT; at++) expect(here.join()).not.toBeNull()
+  })
+
+  test('recusa quando lota', () => {
+    // O log e os ouvintes vivem na memória do objeto, e um código conhecido é
+    // tudo o que alguém precisaria para abrir conexões até doer.
+    const here = room()
+    for (let at = 0; at < ROOM_LIMIT; at++) here.join()
+
+    expect(here.join()).toBeNull()
+  })
+
+  test('abre vaga quando alguém sai', () => {
+    const here = room()
+    const first = here.join()
+    for (let at = 1; at < ROOM_LIMIT; at++) here.join()
+
+    first?.close()
+
+    expect(here.join()).not.toBeNull()
+  })
+
+  test('não conta duas vezes quem fecha duas vezes', () => {
+    // Fechar é idempotente, e sem isso um cliente que fechasse em laço abriria
+    // vagas que não existem — o oposto do que o teto faz.
+    const here = room()
+    const first = here.join()
+    for (let at = 1; at < ROOM_LIMIT; at++) here.join()
+
+    first?.close()
+    first?.close()
+    here.join()
+
+    expect(here.join()).toBeNull()
   })
 })

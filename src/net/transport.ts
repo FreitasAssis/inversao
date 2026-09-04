@@ -34,8 +34,12 @@ export type Room = {
    * Quem decide é a sala, e não quem entra — se o cliente escolhesse, dois
    * jogadores se declarariam azuis e a checagem de autoria inteira, que é o que
    * fecha os furos da seção 2, passaria a proteger nada.
+   *
+   * Null quando a sala está lotada. O teto é generoso e existe só por
+   * segurança: sem ele, abrir mil conexões num código conhecido é um pedido de
+   * memória e de duração que ninguém precisa autenticar para fazer.
    */
-  join(): Transport
+  join(): Transport | null
   /** O que quem reconecta recebe: a partida é isto mais o estado inicial. */
   log(): readonly SequencedAction[]
 }
@@ -49,14 +53,32 @@ export type Room = {
  * verdade — e que portar para o Durable Object é mudar o transporte, não a
  * regra.
  */
+/**
+ * Quantas conexões uma sala aguenta.
+ *
+ * Dois jogadores e um número folgado de espectadores. Não é um limite de
+ * produto — assistir é bom, e ninguém vai bater nisto jogando —, é uma válvula:
+ * o log e os ouvintes vivem na memória do objeto, e um código conhecido é tudo
+ * o que alguém precisaria para abrir conexões até doer.
+ */
+export const ROOM_LIMIT = 64
+
 export function createRoom(deal: Deal, config: RoomConfig): Room {
   let seq = 0
   let established = false
   const dealt = new Map<number, Side>()
   const log: SequencedAction[] = []
   const taken = new Set<Side>()
+  /** Conexões abertas, jogadores e espectadores juntos. */
+  let present = 0
   /** Todo mundo que está ouvindo, com ou sem assento. */
   let listeners: ((message: Inbound) => void)[] = []
+
+  /** Os dois assentos ocupados. É o que a tela de espera aguarda. */
+  const paired = () => taken.size === 2
+  const announce = () => {
+    for (const listen of [...listeners]) listen({ kind: 'peer', present: paired() })
+  }
 
   const broadcast = (from: SequencedAction['from'], action: Action) => {
     const message: SequencedAction = { seq: seq++, from, action }
@@ -68,12 +90,19 @@ export function createRoom(deal: Deal, config: RoomConfig): Room {
 
   return {
     log: () => log,
-    join(): Transport {
+    join(): Transport | null {
+      if (present >= ROOM_LIMIT) return null
+      present += 1
       const side = (['blue', 'orange'] as const).find((seat) => !taken.has(seat))
       const seat: Seat = side ?? 'spectator'
       if (side !== undefined) taken.add(side)
       const first = !established
       established = true
+      // Anuncia ao entrar, e não ao assinar: sentar é o que muda a ocupação, e
+      // prender o aviso à assinatura fazia uma conexão que ainda não escutou
+      // ficar invisível para os outros. Quem acabou de chegar recebe o valor
+      // atual na própria assinatura, logo abaixo.
+      announce()
       let open = true
       /** Os desta conexão, para `close` levar todos embora. */
       let mine: ((message: Inbound) => void)[] = []
@@ -110,6 +139,7 @@ export function createRoom(deal: Deal, config: RoomConfig): Room {
           // mecanismo da reconexão — a partida é estado inicial mais lista de
           // ações, e assinar é receber a lista.
           listen({ kind: 'welcome', seat, config, first })
+          listen({ kind: 'peer', present: paired() })
           for (const message of log) listen({ kind: 'action', message })
           listeners = [...listeners, listen]
           mine = [...mine, listen]
@@ -119,7 +149,9 @@ export function createRoom(deal: Deal, config: RoomConfig): Room {
           }
         },
         close() {
+          if (!open) return
           open = false
+          present -= 1
           // Leva os ouvintes junto. Fechar sem isso deixaria a conexão morta
           // recebendo a partida inteira, e no Durable Object seria um `send`
           // num socket já fechado a cada lance.
@@ -127,7 +159,10 @@ export function createRoom(deal: Deal, config: RoomConfig): Room {
           mine = []
           // O assento volta a ficar livre, e é isso que faz reconectar
           // funcionar: quem volta senta no mesmo lugar e recebe o log inteiro.
-          if (side !== undefined) taken.delete(side)
+          if (side !== undefined) {
+            taken.delete(side)
+            announce()
+          }
         },
       }
     },
