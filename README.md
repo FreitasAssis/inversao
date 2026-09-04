@@ -65,17 +65,17 @@ o service worker só precisa conseguir abrir a página, e fecha a aba sem perder
 partida em andamento volta rejogada pelo motor a partir da lista de ações, não de uma posição
 guardada.
 
-**E tem puzzle diário.** Três por dia, um de cada tabuleiro, iguais para todo mundo — a data
+**Tem puzzle diário.** Três por dia, um de cada tabuleiro, iguais para todo mundo — a data
 UTC é a única entrada, sem servidor e sem requisição. Cada um é uma partida de verdade a
 partir de uma posição tirada da tabela, e errar não devolve "errado": devolve **quanto custou**
 em pontos de probabilidade de vitória. Quase nenhum jogo consegue dizer isso.
 
-**E foi jogado.** Era a pendência mais importante do projeto e a única não computável — toda
+**Foi jogado.** Era a pendência mais importante do projeto e a única não computável — toda
 a análise provava que o jogo não estava quebrado, não que valesse a pena. Testado com
 pessoas, ele se sustenta. As partidas terminaram entre **119 e 164 ações**, e não nos vinte
 lances que fariam o erro ser decisivo cedo demais.
 
-**E dá para contar.** No fim da partida sai um card: a posição final como grade, a curva de
+**Dá para contar.** No fim da partida sai um card: a posição final como grade, a curva de
 probabilidade e o lance exato em que virou. No celular vai como imagem pela folha nativa; no
 desktop, onde a Web Share API quase não existe, o texto vai para a área de transferência.
 
