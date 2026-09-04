@@ -70,7 +70,7 @@ const subjects: [string, () => Subject][] = [
         transport,
         speak: () => {
           wire.deliver({ kind: 'welcome', seat: 'blue', config: CONFIG, first: true })
-          wire.deliver({ kind: 'peer', present: true })
+          wire.deliver({ kind: 'peer', present: true, ready: { blue: true, orange: true } })
           wire.deliver({
             kind: 'action',
             message: { seq: 0, from: 'blue', action: { type: 'offerDraw' } },

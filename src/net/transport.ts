@@ -74,10 +74,27 @@ export function createRoom(deal: Deal, config: RoomConfig): Room {
   /** Todo mundo que está ouvindo, com ou sem assento. */
   let listeners: ((message: Inbound) => void)[] = []
 
+  /** Quem já apertou o botão de começar. */
+  const readied = new Set<Side>()
+
   /** Os dois assentos ocupados. É o que a tela de espera aguarda. */
   const paired = () => taken.size === 2
+
+  /**
+   * Depois do primeiro lance, todo mundo lê como pronto.
+   *
+   * Sem isto, quem reconecta ficaria preso num aperto de mão que já aconteceu —
+   * o assento é liberado ao sair, e voltaria sem a confirmação que deu antes.
+   */
+  const ready = (side: Side) => log.length > 0 || readied.has(side)
+
   const announce = () => {
-    for (const listen of [...listeners]) listen({ kind: 'peer', present: paired() })
+    const message: Inbound = {
+      kind: 'peer',
+      present: paired(),
+      ready: { blue: ready('blue'), orange: ready('orange') },
+    }
+    for (const listen of [...listeners]) listen(message)
   }
 
   const broadcast = (from: SequencedAction['from'], action: Action) => {
@@ -112,6 +129,11 @@ export function createRoom(deal: Deal, config: RoomConfig): Room {
           // Espectador não tem por onde jogar, e a regra mora aqui — não num
           // botão desabilitado em alguma tela.
           if (!open || side === undefined) return
+          if (message.kind === 'ready') {
+            readied.add(side)
+            announce()
+            return
+          }
           if (message.kind === 'act') {
             // O `from` é do assento, nunca do que o cliente disse. É a única
             // coisa que precisa ser inforjável, e a sala a sabe sem saber nada
@@ -139,7 +161,11 @@ export function createRoom(deal: Deal, config: RoomConfig): Room {
           // mecanismo da reconexão — a partida é estado inicial mais lista de
           // ações, e assinar é receber a lista.
           listen({ kind: 'welcome', seat, config, first })
-          listen({ kind: 'peer', present: paired() })
+          listen({
+            kind: 'peer',
+            present: paired(),
+            ready: { blue: ready('blue'), orange: ready('orange') },
+          })
           for (const message of log) listen({ kind: 'action', message })
           listeners = [...listeners, listen]
           mine = [...mine, listen]

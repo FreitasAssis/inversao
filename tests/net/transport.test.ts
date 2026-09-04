@@ -343,3 +343,56 @@ describe('o teto de conexões', () => {
     expect(here.join()).toBeNull()
   })
 })
+
+describe('o aperto de mão', () => {
+  const peers = (heard: Inbound[]) =>
+    heard.filter((message) => message.kind === 'peer') as Extract<Inbound, { kind: 'peer' }>[]
+
+  test('ninguém começa pronto', () => {
+    const here = room()
+    const first = enter(here)
+    enter(here)
+
+    expect(peers(first.heard).at(-1)?.ready).toEqual({ blue: false, orange: false })
+  })
+
+  test('confirmar avisa os dois lados', () => {
+    const here = room()
+    const first = enter(here)
+    const second = enter(here)
+
+    first.transport.send({ kind: 'ready' })
+
+    expect(peers(second.heard).at(-1)?.ready).toEqual({ blue: true, orange: false })
+  })
+
+  test('espectador não confirma nada', () => {
+    // Ele não tem assento, e a partida não pode depender de quem só assiste.
+    const here = room()
+    const first = enter(here)
+    enter(here)
+    const watcher = enter(here)
+
+    watcher.transport.send({ kind: 'ready' })
+
+    expect(peers(first.heard).at(-1)?.ready).toEqual({ blue: false, orange: false })
+  })
+
+  test('depois do primeiro lance, todos leem como prontos', () => {
+    // É o que impede quem reconecta de ficar preso num aperto de mão que já
+    // aconteceu: o assento é liberado ao sair e voltaria sem a confirmação.
+    const here = room()
+    const first = enter(here)
+    enter(here)
+    first.transport.send({ kind: 'ready' })
+    act0(first)
+
+    const late = enter(here)
+
+    expect(peers(late.heard).at(-1)?.ready).toEqual({ blue: true, orange: true })
+  })
+})
+
+/** Um lance qualquer, só para o log deixar de estar vazio. */
+const act0 = (who: { transport: Transport }) =>
+  who.transport.send({ kind: 'act', action: { type: 'offerDraw' } })

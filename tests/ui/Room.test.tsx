@@ -45,6 +45,27 @@ function seatIn(sala: Sala): Transport {
   return transport
 }
 
+/**
+ * O adversário entra, assina e confirma — a metade do aperto de mão que não é
+ * da tela sob teste.
+ */
+function opponentArrives(sala: Sala): Transport {
+  const other = seatIn(sala)
+  other.onReceive(() => {})
+  other.send({ kind: 'ready' })
+  return other
+}
+
+/** O aperto de mão inteiro: o outro confirma, e esta tela também. */
+async function bothStart(sala: Sala): Promise<Transport> {
+  let other: Transport | null = null
+  act(() => {
+    other = opponentArrives(sala)
+  })
+  await userEvent.setup().click(screen.getByRole('button', { name: /começar/i }))
+  return other as unknown as Transport
+}
+
 describe('entrando numa sala', () => {
   beforeEach(() => localStorage.clear())
 
@@ -72,46 +93,68 @@ describe('entrando numa sala', () => {
     expect(sala.log()).toHaveLength(0)
   })
 
-  test('abre o tabuleiro quando o segundo jogador entra', () => {
+  test('anuncia a chegada do adversário, e ainda não abre o tabuleiro', () => {
+    // O aperto de mão é dos dois: um botão só de um lado mudaria a assimetria
+    // de lugar, com quem criou vendo o tabuleiro enquanto o outro decide.
     const sala = createRoom(always('blue'), CONFIG)
     const { connect } = wire(sala)
     render(<Room code="K3M9" connect={connect} search="" />)
 
     act(() => {
-      seatIn(sala)
+      opponentArrives(sala)
     })
+
+    expect(screen.getByText(/aguarda para iniciar/i)).toBeInTheDocument()
+    expect(screen.queryByRole('grid', { name: /tabuleiro/i })).toBeNull()
+  })
+
+  test('abre o tabuleiro quando os dois confirmam', async () => {
+    const sala = createRoom(always('blue'), CONFIG)
+    const { connect } = wire(sala)
+    render(<Room code="K3M9" connect={connect} search="" />)
+
+    await bothStart(sala)
 
     expect(screen.getByRole('grid', { name: /tabuleiro/i })).toBeInTheDocument()
   })
 
-  test('não volta à espera quando o adversário sai', () => {
+  test('espera o outro depois de eu confirmar sozinho', async () => {
+    const sala = createRoom(always('blue'), CONFIG)
+    const { connect } = wire(sala)
+    render(<Room code="K3M9" connect={connect} search="" />)
+    act(() => {
+      seatIn(sala).onReceive(() => {})
+    })
+
+    await userEvent.setup().click(screen.getByRole('button', { name: /começar/i }))
+
+    expect(screen.getByRole('button', { name: /esperando o outro/i })).toBeDisabled()
+    expect(screen.queryByRole('grid', { name: /tabuleiro/i })).toBeNull()
+  })
+
+  test('não volta à espera quando o adversário sai', async () => {
     // Voltar desmontaria o `App` e a partida iria junto — a lista de ações
     // vive nele. Perder o adversário no meio é assunto do passo 6, e a resposta
     // lá é uma contagem por cima do tabuleiro, nunca trocar de tela.
     const sala = createRoom(always('blue'), CONFIG)
     const { connect } = wire(sala)
     render(<Room code="K3M9" connect={connect} search="" />)
-    let other: Transport | null = null
-    act(() => {
-      other = seatIn(sala)
-    })
+    const other = await bothStart(sala)
 
-    act(() => (other as unknown as Transport).close())
+    act(() => other.close())
 
     expect(screen.getByRole('grid', { name: /tabuleiro/i })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: /esperando/i })).toBeNull()
   })
 
-  test('joga a partida da sala, e não a do painel de quem entra', () => {
+  test('joga a partida da sala, e não a do painel de quem entra', async () => {
     // O painel abre na Escolha Sorteada. Se a configuração não viesse da sala,
     // as duas telas aceitariam lances diferentes.
     const sala = createRoom(always('blue'), { ...CONFIG, mechanic: 'rotation' })
     const { connect } = wire(sala)
 
     render(<Room code="K3M9" connect={connect} search="" />)
-    act(() => {
-      seatIn(sala)
-    })
+    await bothStart(sala)
 
     expect(screen.getByRole('status')).not.toHaveTextContent(/sorteando/i)
   })
@@ -194,13 +237,14 @@ describe('criando uma sala', () => {
     expect(screen.getByText(/\/sala\/K3M9/)).toBeInTheDocument()
   })
 
-  test('some com o convite quando a partida começa', () => {
+  test('some com o convite quando o adversário chega', () => {
+    // Depois que ele está lá, o link é ruído.
     const sala = createRoom(always('blue'), CONFIG)
     const { connect } = wire(sala)
     render(<Room code="K3M9" search={CREATING} connect={connect} />)
 
     act(() => {
-      seatIn(sala)
+      opponentArrives(sala)
     })
 
     expect(screen.queryByText(/mande este endereço/i)).toBeNull()
@@ -220,8 +264,10 @@ describe('uma sala que não existe', () => {
     const sala = createRoom(always('blue'), CONFIG)
     render(<Room code="K3M9" search="" connect={() => seatIn(sala)} />)
     act(() => {
-      seatIn(sala)
+      opponentArrives(sala)
     })
+    // Com relógio falso, `userEvent` trava; o clique cru serve.
+    act(() => screen.getByRole('button', { name: /começar/i }).click())
 
     act(() => vi.advanceTimersByTime(30_000))
 
