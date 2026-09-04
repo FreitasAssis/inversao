@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { App } from './App'
 import { Mark } from './Mark'
-import { makeCode } from '../net/code'
+import { makeCode, makeToken } from '../net/code'
 import { parseConfig } from '../net/protocol'
 import type { RoomConfig, Seat } from '../net/protocol'
 import type { Side } from '../engine/types'
@@ -34,15 +34,49 @@ type Status =
 export type RoomProps = Readonly<{
   code: string
   /** Injetáveis para o teste não precisar de rede nem de `location`. */
-  connect?: (joining: { code: string; config?: RoomConfig | undefined }) => Transport
+  connect?: (joining: {
+    code: string
+    config?: RoomConfig | undefined
+    token?: string | undefined
+  }) => Transport
   search?: string
   origin?: string
 }>
 
 const browserConnect =
   (origin?: string) =>
-  (joining: { code: string; config?: RoomConfig | undefined }): Transport =>
+  (joining: {
+    code: string
+    config?: RoomConfig | undefined
+    token?: string | undefined
+  }): Transport =>
     socketTransport((url) => new WebSocket(url), { ...joining, origin })
+
+/**
+ * O crachá do assento nesta sala, criado uma vez e guardado.
+ *
+ * Em `localStorage` e não em `sessionStorage` de propósito: o caso que ela
+ * existe para resolver é justamente o navegador **fechado**, e a sessão morre
+ * junto com ele.
+ *
+ * Uma entrada só, porque se joga uma sala por vez. Entrar noutra sobrescreve.
+ */
+const KEY = 'inversao:sala'
+
+function tokenFor(code: string): string {
+  try {
+    const raw = localStorage.getItem(KEY)
+    const kept = raw === null ? null : (JSON.parse(raw) as { code?: string; token?: string })
+    if (kept?.code === code && typeof kept.token === 'string') return kept.token
+    const token = makeToken()
+    localStorage.setItem(KEY, JSON.stringify({ code, token }))
+    return token
+  } catch {
+    // Modo privado, ou armazenamento cheio. Sem crachá ainda dá para jogar —
+    // só não dá para voltar ao mesmo assento.
+    return makeToken()
+  }
+}
 
 /** A configuração que quem cria pendurou no endereço, se houver. */
 function askedIn(search: string): RoomConfig | null {
@@ -67,7 +101,10 @@ export function Room({ code, connect, search, origin }: RoomProps) {
   const open = connect ?? browserConnect(origin)
 
   const transport = useMemo(
-    () => open(asked === null ? { code: here } : { code: here, config: asked }),
+    () => {
+      const token = tokenFor(here)
+      return open(asked === null ? { code: here, token } : { code: here, config: asked, token })
+    },
     // Uma conexão por código. `open` e `asked` são estáveis por montagem, e
     // listá-los faria o socket ser refeito a cada render.
     // eslint-disable-next-line react-hooks/exhaustive-deps

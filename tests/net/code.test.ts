@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { ALPHABET, CODE_LENGTH, isCode, makeCode } from '../../src/net/code'
+import { ALPHABET, CODE_LENGTH, isCode, makeCode, makeToken } from '../../src/net/code'
 
 /**
  * O código é ditado no telefone, e o alfabeto existe por causa disso.
@@ -69,5 +69,26 @@ describe('conferir', () => {
     // essas letras. Um código digitado com O no lugar de zero criava uma sala
     // vazia em vez de falhar na hora.
     expect(isCode(`K3M${letter}`)).toBe(false)
+  })
+})
+
+describe('o crachá do assento', () => {
+  test('não é senha e ninguém o vê', () => {
+    // O navegador o cria, guarda e devolve sozinho. Não aparece na tela, não é
+    // digitado e não protege nada — só serve para a sala reconhecer quem volta.
+    expect(makeToken(() => 0.5)).toMatch(/^[0-9a-z]{16}$/)
+  })
+
+  test('não repete entre duas criações', () => {
+    // Dois crachás iguais dariam a um jogador o assento do outro.
+    let n = 0
+    const walking = () => ((n += 7) % 36) / 36
+
+    expect(makeToken(walking)).not.toBe(makeToken(walking))
+  })
+
+  test('cobre as duas pontas sem estourar', () => {
+    expect(makeToken(() => 0)).toBe('0'.repeat(16))
+    expect(makeToken(() => 0.999999)).toBe('z'.repeat(16))
   })
 })

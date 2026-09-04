@@ -35,11 +35,16 @@ export type Room = {
    * jogadores se declarariam azuis e a checagem de autoria inteira, que é o que
    * fecha os furos da seção 2, passaria a proteger nada.
    *
+   * Com um crachá já conhecido, **reivindica de volta** o mesmo assento e ejeta
+   * quem estiver nele — que é a conexão morta que o servidor ainda não sabia que
+   * morreu. Sem isso, quem volta de um navegador fechado à força vira espectador
+   * da própria partida.
+   *
    * Null quando a sala está lotada. O teto é generoso e existe só por
    * segurança: sem ele, abrir mil conexões num código conhecido é um pedido de
    * memória e de duração que ninguém precisa autenticar para fazer.
    */
-  join(): Transport | null
+  join(token?: string): Transport | null
   /** O que quem reconecta recebe: a partida é isto mais o estado inicial. */
   log(): readonly SequencedAction[]
 }
@@ -71,6 +76,10 @@ export function createRoom(deal: Deal, config: RoomConfig): Room {
   const taken = new Set<Side>()
   /** Conexões abertas, jogadores e espectadores juntos. */
   let present = 0
+  /** Qual assento cada crachá guarda. */
+  const holders = new Map<string, Side>()
+  /** Como despejar quem está sentado agora, por lado. */
+  const seated = new Map<Side, () => void>()
   /** Todo mundo que está ouvindo, com ou sem assento. */
   let listeners: ((message: Inbound) => void)[] = []
 
@@ -109,7 +118,13 @@ export function createRoom(deal: Deal, config: RoomConfig): Room {
 
   return {
     log: () => log,
-    join(): Transport | null {
+    join(token?: string): Transport | null {
+      // Reivindicação antes do teto: quem volta ao próprio assento libera o
+      // lugar do fantasma no mesmo gesto, e não pode esbarrar num limite que
+      // ele mesmo estava ocupando.
+      const claimed = token === undefined ? undefined : holders.get(token)
+      if (claimed !== undefined) seated.get(claimed)?.()
+
       if (present >= ROOM_LIMIT) return null
       /**
        * Terminada e vazia, a sala fecha.
@@ -124,9 +139,13 @@ export function createRoom(deal: Deal, config: RoomConfig): Room {
        */
       if (finished && taken.size === 0) return null
       present += 1
-      const side = (['blue', 'orange'] as const).find((seat) => !taken.has(seat))
+      const side = claimed ?? (['blue', 'orange'] as const).find((seat) => !taken.has(seat))
       const seat: Seat = side ?? 'spectator'
-      if (side !== undefined) taken.add(side)
+      if (side !== undefined) {
+        taken.add(side)
+        // O crachá passa a guardar este assento, e é com ele que se volta.
+        if (token !== undefined) holders.set(token, side)
+      }
       const first = !established
       established = true
       // Anuncia ao entrar, e não ao assinar: sentar é o que muda a ocupação, e
@@ -137,6 +156,25 @@ export function createRoom(deal: Deal, config: RoomConfig): Room {
       let open = true
       /** Os desta conexão, para `close` levar todos embora. */
       let mine: ((message: Inbound) => void)[] = []
+
+      const closeMe = () => {
+        if (!open) return
+        open = false
+        present -= 1
+        // Leva os ouvintes junto. Fechar sem isso deixaria a conexão morta
+        // recebendo a partida inteira, e no Durable Object seria um `send`
+        // num socket já fechado a cada lance.
+        listeners = listeners.filter((one) => !mine.includes(one))
+        mine = []
+        // O assento volta a ficar livre, e é isso que faz reconectar
+        // funcionar: quem volta senta no mesmo lugar e recebe o log inteiro.
+        if (side !== undefined) {
+          if (seated.get(side) === closeMe) seated.delete(side)
+          taken.delete(side)
+          announce()
+        }
+      }
+      if (side !== undefined) seated.set(side, closeMe)
 
       return {
         send(message) {
@@ -192,22 +230,7 @@ export function createRoom(deal: Deal, config: RoomConfig): Room {
             mine = mine.filter((one) => one !== listen)
           }
         },
-        close() {
-          if (!open) return
-          open = false
-          present -= 1
-          // Leva os ouvintes junto. Fechar sem isso deixaria a conexão morta
-          // recebendo a partida inteira, e no Durable Object seria um `send`
-          // num socket já fechado a cada lance.
-          listeners = listeners.filter((one) => !mine.includes(one))
-          mine = []
-          // O assento volta a ficar livre, e é isso que faz reconectar
-          // funcionar: quem volta senta no mesmo lugar e recebe o log inteiro.
-          if (side !== undefined) {
-            taken.delete(side)
-            announce()
-          }
-        },
+        close: closeMe,
       }
     },
   }

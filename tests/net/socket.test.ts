@@ -66,6 +66,20 @@ describe('o endereço', () => {
     )
   })
 
+  test('leva o crachá do assento', () => {
+    // É por ele que a sala reconhece quem volta. Sem ir no endereço, ela não
+    // teria como saber na hora de sentar — e depois já é tarde.
+    expect(addressOf({ code: 'K3M9', token: 'abc123', origin: 'ws://t' })).toBe(
+      'ws://t/sala/K3M9?t=abc123',
+    )
+  })
+
+  test('leva os dois quando quem cria também volta', () => {
+    expect(addressOf({ code: 'K3M9', config: CONFIG, token: 'abc', origin: 'ws://t' })).toBe(
+      'ws://t/sala/K3M9?b=dbu&m=choice&e=0&t=abc',
+    )
+  })
+
   test('não leva configuração nenhuma para quem entra', () => {
     // Quem entra recebe a da sala. Mandar a própria faria o link de convite
     // criar uma sala nova em vez de entrar na que existe.

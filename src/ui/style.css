@@ -1145,6 +1145,18 @@ p.evaluation strong {
  * would play one combination and leave without learning the others exist.
  * Everything that is genuinely a preference went into the dialog.
  */
+/*
+ * O `hidden` precisa vencer, e sem isto ele não vence: qualquer regra com
+ * `display` derrota o `display: none` que o navegador dá ao atributo, porque a
+ * folha do navegador vem antes. Escondi a configuração numa sala com `hidden` e
+ * ela continuou na tela inteira — mecânica, tabuleiro e nível, todos clicáveis.
+ *
+ * Vale para tudo neste arquivo que declare `display` e possa ser escondido.
+ */
+[hidden] {
+  display: none !important;
+}
+
 .setup {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));

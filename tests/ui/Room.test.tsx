@@ -356,3 +356,42 @@ describe('o convite', () => {
     expect(screen.getByText(/\/sala\/K3M9/)).toBeVisible()
   })
 })
+
+describe('voltar depois de o navegador morrer', () => {
+  beforeEach(() => localStorage.clear())
+
+  test('guarda o crachá e o devolve ao reabrir a mesma sala', () => {
+    // É o que faz voltar ao próprio assento em vez de virar espectador da
+    // própria partida. Em `localStorage` porque o caso é justamente o navegador
+    // **fechado** — a sessão morre junto com ele.
+    const sala = createRoom(always('blue'), CONFIG)
+    const seen: (string | undefined)[] = []
+    const connect = (joining: { code: string; token?: string | undefined }) => {
+      seen.push(joining.token)
+      return seatIn(sala)
+    }
+
+    const first = render(<Room code="K3M9" search="" connect={connect} />)
+    first.unmount()
+    render(<Room code="K3M9" search="" connect={connect} />)
+
+    expect(seen[0]).toBeDefined()
+    expect(seen[1]).toBe(seen[0])
+  })
+
+  test('cada sala tem o seu', () => {
+    // Guardar um só e reusá-lo noutra sala daria a alguém o assento de uma
+    // partida em que ele nunca entrou.
+    const sala = createRoom(always('blue'), CONFIG)
+    const seen: (string | undefined)[] = []
+    const connect = (joining: { code: string; token?: string | undefined }) => {
+      seen.push(joining.token)
+      return seatIn(sala)
+    }
+
+    render(<Room code="K3M9" search="" connect={connect} />).unmount()
+    render(<Room code="P7XQ" search="" connect={connect} />)
+
+    expect(seen[1]).not.toBe(seen[0])
+  })
+})
