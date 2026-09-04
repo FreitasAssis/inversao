@@ -395,3 +395,27 @@ describe('voltar depois de o navegador morrer', () => {
     expect(seen[1]).not.toBe(seen[0])
   })
 })
+
+describe('o nome de quem entra', () => {
+  beforeEach(() => localStorage.clear())
+
+  test('sai das configurações e vai com a conexão', () => {
+    // Sem chegar na hora de sentar, a sala não teria como contar aos outros
+    // quem chegou — e as duas telas contariam a partida com nomes diferentes.
+    localStorage.setItem('inversao:settings', JSON.stringify({ playerName: 'Luiz' }))
+    const sala = createRoom(always('blue'), CONFIG)
+    let sent: string | undefined
+    render(
+      <Room
+        code="K3M9"
+        search=""
+        connect={(joining) => {
+          sent = joining.name
+          return seatIn(sala)
+        }}
+      />,
+    )
+
+    expect(sent).toBe('Luiz')
+  })
+})

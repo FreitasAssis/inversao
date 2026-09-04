@@ -364,3 +364,28 @@ describe('o fim da partida', () => {
     expect(room.join()).toBeNull()
   })
 })
+
+describe('os nomes', () => {
+  beforeEach(() => localStorage.clear())
+
+  test('as duas telas contam a mesma partida', async () => {
+    // Quem digitou "Luiz" via "Vitória de Luiz" e o outro via "Vitória de Azul".
+    const room = createRoom(always('blue'), CONFIG)
+    const seats = { blue: room.join('c1', 'Luiz'), orange: room.join('c2', 'Ana') }
+    if (seats.blue === null || seats.orange === null) throw new Error('sala recusou')
+    const blue = within(render(<App online={{ transport: seats.blue }} />).container)
+    const orange = within(render(<App online={{ transport: seats.orange }} />).container)
+    const user = userEvent.setup()
+
+    await user.click(blue.getByRole('button', { name: /desistir/i }))
+
+    expect(blue.getByRole('alert')).toHaveTextContent(/Vitória de Ana/)
+    expect(orange.getByRole('alert')).toHaveTextContent(/Vitória de Ana/)
+  })
+
+  test('sem nome digitado, a cor faz as vezes', () => {
+    const { blue } = table('blue')
+
+    expect(blue.getByRole('status')).toHaveTextContent(/azul|laranja/i)
+  })
+})

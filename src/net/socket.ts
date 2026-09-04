@@ -64,17 +64,25 @@ export type Joining = {
    * hora de sentar** — depois já é tarde, o lugar foi dado a outro.
    */
   token?: string | undefined
+  /**
+   * Como você quer ser chamado.
+   *
+   * Vai no endereço pelo mesmo motivo que o resto: a sala precisa dele **na
+   * hora de sentar**, para já contar aos outros quem chegou.
+   */
+  name?: string | undefined
   /** Só o host, para o teste apontar para outro lugar. */
   origin?: string | undefined
 }
 
-export function addressOf({ code, config, token, origin }: Joining): string {
+export function addressOf({ code, config, token, name, origin }: Joining): string {
   const base = origin ?? location.origin.replace(/^http/, 'ws')
   const parts: string[] = []
   if (config !== undefined) {
     parts.push(`b=${config.board}`, `m=${config.mechanic}`, `e=${config.evaluation ? '1' : '0'}`)
   }
   if (token !== undefined) parts.push(`t=${encodeURIComponent(token)}`)
+  if (name !== undefined && name !== '') parts.push(`n=${encodeURIComponent(name)}`)
   const query = parts.length === 0 ? '' : `?${parts.join('&')}`
   return `${base}/sala/${code.toUpperCase()}${query}`
 }
