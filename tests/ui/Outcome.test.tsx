@@ -69,3 +69,28 @@ describe('Outcome', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(/desistência/i)
   })
 })
+
+describe('abandono', () => {
+  test('anuncia a vitória de quem ficou', () => {
+    render(<Outcome result={{ kind: 'abandonment', winner: 'blue' }} actions={84} tone="celebration" />)
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/Vitória de Azul/)
+  })
+
+  test('diz que o adversário saiu, e não que ele desistiu', () => {
+    // Ninguém desistiu: a conexão caiu. Reaproveitar "por desistência" seria
+    // afirmar uma coisa que não aconteceu.
+    render(<Outcome result={{ kind: 'abandonment', winner: 'blue' }} actions={84} tone="celebration" />)
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/o adversário saiu/)
+    expect(screen.getByRole('alert')).not.toHaveTextContent(/desist/i)
+  })
+
+  test('marca o lado que saiu como perdedor, para o tabuleiro apagá-lo', () => {
+    const { container } = render(
+      <Outcome result={{ kind: 'abandonment', winner: 'blue' }} actions={84} tone="celebration" />,
+    )
+
+    expect(container.querySelector('[data-loser="orange"]')).toBeInTheDocument()
+  })
+})

@@ -52,11 +52,30 @@ describe('the deploy configuration', () => {
     expect(existsSync('public/_redirects')).toBe(false)
   })
 
-  test('ships no server code at all', () => {
-    // The whole project is built on there being no server: the engine, the
-    // search, the tables and the puzzles all run in the browser. A `main` here
-    // would be the first line of one.
-    expect(config.main).toBeUndefined()
+  test('declara exatamente um código de servidor, e é a sala', () => {
+    // Este teste dizia o contrário — `expect(config.main).toBeUndefined()` —, e
+    // a promessa era real: motor, busca, tabelas e desafios rodam todos no
+    // navegador.
+    //
+    // O passo 9 a quebra de propósito, e o que ela custa é pequeno o bastante
+    // para caber numa frase: existe uma sala, ela carimba quem falou e sorteia a
+    // iniciativa, e não conhece as regras do jogo. O que este teste guarda agora
+    // é que não apareça um segundo.
+    expect(config.main).toBe('worker/index.ts')
+  })
+
+  test('liga a sala como Durable Object, na variante que o plano gratuito serve', () => {
+    // `new_classes` exigiria plano pago, e a falha só apareceria no deploy.
+    expect(config.durable_objects.bindings).toEqual([{ name: 'SALA', class_name: 'Sala' }])
+    expect(config.migrations[0].new_sqlite_classes).toEqual(['Sala'])
+  })
+
+  test('deixa a sala responder antes dos arquivos estáticos', () => {
+    // Sem isto o multiplayer não existe, e o sintoma seria confuso:
+    // `single-page-application` responde o `index.html` para **todo** endereço
+    // sem arquivo correspondente, então o pedido de WebSocket receberia uma
+    // página HTML em vez de chegar à sala.
+    expect(config.assets.run_worker_first).toContain('/sala/*')
   })
 
   test('is pinned to a compatibility date', () => {

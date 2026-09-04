@@ -280,3 +280,25 @@ describe('o card dos desafios do dia', () => {
     expect(text).toContain('Ponte ✔')
   })
 })
+
+describe('o card de um abandono', () => {
+  const abandoned: ShareMatch = {
+    ...base,
+    result: { kind: 'abandonment', winner: 'blue' },
+    names: { blue: 'Luiz', orange: 'Ana' },
+    level: null,
+  }
+
+  test('conta como foi ganha, sem dizer que alguém desistiu', () => {
+    const text = shareText(abandoned)
+
+    expect(text).toContain('Vitória de Luiz sobre Ana, o adversário saiu')
+    expect(text).not.toContain('desistência')
+  })
+
+  test('não cai no texto de empate', () => {
+    // O `drawWord` tem um `default`, então um `kind` novo que não fosse listado
+    // como vitória viraria "Empate no limite de lances" em silêncio.
+    expect(shareText(abandoned)).not.toContain('Empate')
+  })
+})

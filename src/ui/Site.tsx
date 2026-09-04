@@ -1,6 +1,7 @@
 import { App } from './App'
 import { Analysis } from './Analysis'
 import { Puzzle } from './Puzzle'
+import { Room } from './Room'
 import { Rules } from './Rules'
 import { useRoute } from './routes'
 
@@ -10,9 +11,10 @@ import { useRoute } from './routes'
  * (project doc 3).
  */
 export function Site() {
-  const [route] = useRoute()
-  if (route === 'puzzle') return <Puzzle />
-  if (route === 'rules') return <Rules />
-  if (route === 'analysis') return <Analysis />
+  const [place] = useRoute()
+  if (place.route === 'puzzle') return <Puzzle />
+  if (place.route === 'rules') return <Rules />
+  if (place.route === 'analysis') return <Analysis />
+  if (place.route === 'room' && place.code !== null) return <Room code={place.code} />
   return <App />
 }

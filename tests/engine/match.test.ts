@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { applyAction, positionAt, startMatch, turn } from '../../src/engine/match'
+import { applyAction, positionAt, replayMatch, startMatch, turn } from '../../src/engine/match'
 import type { Action } from '../../src/engine/match'
 
 /** Plays a list of actions, failing loudly if any is rejected. */
@@ -187,5 +187,58 @@ describe('the draw is an action, not a derived value', () => {
 
     expect(positionAt(match, 5)).toEqual(match.placement)
     expect(positionAt(match, 2).blue).toEqual([5, 1, 0])
+  })
+})
+
+describe('abandono', () => {
+  const sorteada = () => startMatch({ board: 'dbu', mechanic: 'choice' })
+  const drawn = () => {
+    const result = applyAction(sorteada(), { type: 'draw', initiative: 'blue' })
+    if (!result.ok) throw new Error(result.reason)
+    return result.match
+  }
+
+  test('encerra a partida com o vencedor que veio na ação', () => {
+    // Ao contrário de `resign`, o vencedor não é derivável de quem está na vez:
+    // quem some costuma sumir justamente fora da vez.
+    const result = applyAction(drawn(), { type: 'abandon', winner: 'orange' })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error(result.reason)
+    expect(result.match.result).toEqual({ kind: 'abandonment', winner: 'orange' })
+  })
+
+  test('funciona com a rodada esperando o sorteio', () => {
+    // É onde não há de quem seja a vez — e é um momento tão bom quanto outro
+    // para o metrô entrar no túnel.
+    const result = applyAction(sorteada(), { type: 'abandon', winner: 'blue' })
+
+    expect(result.ok).toBe(true)
+  })
+
+  test('funciona com uma proposta de empate aberta', () => {
+    // A guarda "responda a proposta primeiro" recusa tudo o mais. Abandono
+    // precisa passar antes dela, senão sumir durante uma proposta trava a
+    // partida para quem ficou.
+    const offered = applyAction(drawn(), { type: 'offerDraw' })
+    if (!offered.ok) throw new Error(offered.reason)
+
+    expect(applyAction(offered.match, { type: 'abandon', winner: 'orange' }).ok).toBe(true)
+  })
+
+  test('não reabre uma partida já decidida', () => {
+    const over = applyAction(drawn(), { type: 'resign' })
+    if (!over.ok) throw new Error(over.reason)
+
+    expect(applyAction(over.match, { type: 'abandon', winner: 'blue' }).ok).toBe(false)
+  })
+
+  test('sobrevive ao replay, porque entra na lista como qualquer ação', () => {
+    const match = replayMatch({ board: 'dbu', mechanic: 'choice' }, [
+      { type: 'draw', initiative: 'blue' },
+      { type: 'abandon', winner: 'orange' },
+    ])
+
+    expect(match?.result).toEqual({ kind: 'abandonment', winner: 'orange' })
   })
 })

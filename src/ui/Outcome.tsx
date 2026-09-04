@@ -47,13 +47,14 @@ export function Outcome({ result, actions, tone, names }: OutcomeProps) {
       <span className="outcome-count">
         {actions} ações
         {result.kind === 'resignation' && ' · por desistência'}
+        {result.kind === 'abandonment' && ' · o adversário saiu'}
       </span>
     </div>
   )
 }
 
 function loserOf(result: Result): Side | null {
-  if (result.kind === 'win' || result.kind === 'resignation') {
+  if (result.kind === 'win' || result.kind === 'resignation' || result.kind === 'abandonment') {
     return result.winner === 'blue' ? 'orange' : 'blue'
   }
   return null
@@ -69,6 +70,9 @@ function headline(result: Result, naming: (side: Side) => string): string {
     // legible from across the room. How it was won goes in the small print.
     case 'win':
     case 'resignation':
+    // Abandono também é vitória, e a vitória é o que precisa ser legível do
+    // outro lado da sala. Como foi ganha vai na letra miúda.
+    case 'abandonment':
       return `Vitória de ${naming(result.winner)}!`
     case 'agreedDraw':
       return 'Empate por acordo'

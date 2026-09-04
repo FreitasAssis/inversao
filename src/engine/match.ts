@@ -27,10 +27,27 @@ export type Action =
   | { type: 'acceptDraw' }
   | { type: 'declineDraw' }
   | { type: 'resign' }
+  /**
+   * O adversário sumiu e quem ficou encerrou (desenho do passo 9, seção 5.1).
+   *
+   * Carrega o vencedor porque, ao contrário de `resign`, ele **não** é derivável
+   * de quem está na vez: quem abandona costuma sumir justamente fora da vez, e
+   * a rodada pode estar esperando o sorteio, onde não há vez nenhuma.
+   *
+   * Só a sala emite. Um jogador que pudesse emitir reivindicaria vitória a
+   * qualquer momento — é o mesmo motivo pelo qual só a sala sorteia.
+   */
+  | { type: 'abandon'; winner: Side }
 
 export type Result =
   | { kind: 'win'; winner: Side }
   | { kind: 'resignation'; winner: Side }
+  /**
+   * Ninguém desistiu: a conexão caiu e quem ficou escolheu encerrar. Existe
+   * como `kind` próprio para não afirmar que a pessoa desistiu quando ela só
+   * entrou num túnel.
+   */
+  | { kind: 'abandonment'; winner: Side }
   | { kind: 'agreedDraw' }
   | { kind: 'repetitionDraw' }
   /** The match hit its cap on actions without anyone getting three pieces home. */
@@ -196,6 +213,13 @@ export function applyAction(match: Match, action: Action): ApplyResult {
     if (!pending) return { ok: false, reason: 'no draw was offered' }
     return record({})
   }
+  // Antes da guarda da oferta pendente, e antes da vez: quem some pode sumir a
+  // qualquer momento, inclusive com uma proposta de empate aberta ou com a
+  // rodada esperando o sorteio, onde não há de quem seja a vez.
+  if (action.type === 'abandon') {
+    return record({ result: { kind: 'abandonment', winner: action.winner } })
+  }
+
   if (pending) return { ok: false, reason: 'answer the draw offer first' }
 
   if (action.type === 'draw') {

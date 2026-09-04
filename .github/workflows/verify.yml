@@ -22,9 +22,17 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - run: npx tsc --noEmit
-      - run: npm test
+
+      # Os dois tsconfig: o do navegador e o do servidor. Eram um só, e o
+      # `worker/` ficava de fora do `include` — publicado sem checagem nenhuma.
+      - run: npm run typecheck
+
+      # O build vem **antes** dos testes, e não é ordem estética: a sala serve a
+      # página, e o teste dela em Miniflare pede o `index.html` de dentro do
+      # `dist/`. Sem construir antes, esse teste falha numa checagem limpa e
+      # passa na máquina de quem tem sobra de um build anterior.
       - run: npm run build
+      - run: npm test
 
   # Os onze testes que a rápida pula.
   #
@@ -66,6 +74,9 @@ jobs:
       - if: steps.cache.outputs.cache-hit != 'true'
         name: generate the five production tables
         run: cd tools && make tabelas
+
+      # Mesmo motivo da rápida: a sala serve a página, e o teste dela lê o `dist/`.
+      - run: npm run build
 
       - name: fail if any test silently skipped
         run: |
