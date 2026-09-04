@@ -454,3 +454,87 @@ describe('a sala depois do fim', () => {
     expect(here.join()).not.toBeNull()
   })
 })
+
+describe('voltar ao próprio assento', () => {
+  test('o crachá traz o mesmo lado de volta', () => {
+    // O caso que motivou tudo: o navegador morre sem mandar quadro de
+    // fechamento, o servidor não sabe, e o assento fica ocupado por um
+    // fantasma. Sem o crachá, quem volta vira espectador da própria partida.
+    const here = room()
+    const first = here.join('cracha-do-azul')
+    first?.onReceive(() => {})
+    const second = enter(here)
+
+    // O azul volta **sem** o anterior ter fechado: é essa a situação.
+    const again = here.join('cracha-do-azul')
+    const heard: Inbound[] = []
+    again?.onReceive((message) => heard.push(message))
+
+    expect(welcome(heard).seat).toBe('blue')
+    expect(welcome(second.heard).seat).toBe('orange')
+  })
+
+  test('despeja o fantasma em vez de somar mais um', () => {
+    const here = room()
+    const first = here.join('cracha')
+    const heard: Inbound[] = []
+    first?.onReceive((message) => heard.push(message))
+
+    here.join('cracha')?.onReceive(() => {})
+    act0({ transport: enter(here).transport })
+
+    // A conexão antiga não recebe mais nada: ela foi despejada, não duplicada.
+    expect(actions(heard)).toHaveLength(0)
+  })
+
+  test('traz o lado certo, e não o primeiro que estiver vago', () => {
+    // Despejar o fantasma libera o assento, então "procurar um lugar livre"
+    // devolveria o **primeiro** — o azul — a quem era laranja. O crachá diz
+    // qual lado era, e é o lado que importa.
+    const here = room()
+    const blue = here.join('cracha-do-azul')
+    blue?.onReceive(() => {})
+    const orange = here.join('cracha-do-laranja')
+    orange?.onReceive(() => {})
+    blue?.close()
+
+    const heard: Inbound[] = []
+    here.join('cracha-do-laranja')?.onReceive((message) => heard.push(message))
+
+    expect(welcome(heard).seat).toBe('orange')
+  })
+
+  test('não empresta assento a um crachá desconhecido', () => {
+    const here = room()
+    here.join('cracha-do-azul')?.onReceive(() => {})
+    here.join('cracha-do-laranja')?.onReceive(() => {})
+
+    const heard: Inbound[] = []
+    here.join('cracha-de-mais-ninguem')?.onReceive((message) => heard.push(message))
+
+    expect(welcome(heard).seat).toBe('spectator')
+  })
+
+  test('sem crachá, senta onde houver lugar', () => {
+    const here = room()
+    here.join('cracha')?.onReceive(() => {})
+
+    const heard: Inbound[] = []
+    here.join()?.onReceive((message) => heard.push(message))
+
+    expect(welcome(heard).seat).toBe('orange')
+  })
+
+  test('reivindicar não esbarra no teto que ele mesmo ocupava', () => {
+    // Voltar libera um lugar no mesmo gesto. Conferir o teto antes da
+    // reivindicação recusaria justamente quem tinha direito de entrar.
+    const here = room()
+    here.join('cracha')?.onReceive(() => {})
+    for (let at = 1; at < ROOM_LIMIT; at++) here.join()
+
+    const heard: Inbound[] = []
+    here.join('cracha')?.onReceive((message) => heard.push(message))
+
+    expect(welcome(heard).seat).toBe('blue')
+  })
+})

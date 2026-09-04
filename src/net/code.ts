@@ -32,3 +32,27 @@ export function makeCode(random: () => number = Math.random): string {
   }
   return code
 }
+
+/**
+ * O crachá do assento.
+ *
+ * **Não é senha e ninguém o vê.** O navegador o cria sozinho, guarda sozinho e
+ * o devolve sozinho; ele nunca aparece na tela, nunca é digitado e não protege
+ * nada — só serve para a sala reconhecer que é a mesma pessoa voltando.
+ *
+ * Por isso o alfabeto inteiro e o comprimento maior: ao contrário do código da
+ * sala, este nunca é ditado no telefone.
+ *
+ * Existe porque **o servidor não distingue uma conexão morta de uma calada**.
+ * Fechar a aba manda um quadro de fechamento e o assento é liberado na hora;
+ * matar o navegador, o celular suspender a aba ou a rede cair não mandam nada,
+ * e o assento fica ocupado por um fantasma. Sem ele, quem volta encontra
+ * os dois lugares tomados e entra como espectador da própria partida.
+ */
+export function makeToken(random: () => number = Math.random): string {
+  let token = ''
+  for (let at = 0; at < 16; at++) {
+    token += Math.floor(random() * 36).toString(36)
+  }
+  return token
+}
