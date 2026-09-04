@@ -554,6 +554,18 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700, online }: AppP
   }, [online])
 
   /**
+   * Avisa a sala que a partida acabou.
+   *
+   * Ela não conhece as regras e não teria como saber. É com isto que ela fecha
+   * quando o último sair, em vez de deixar o link abrindo uma partida acabada
+   * até o Durable Object ser evictado.
+   */
+  useEffect(() => {
+    if (online === undefined || match.result === null) return
+    online.transport.send({ kind: 'over' })
+  }, [online, match.result])
+
+  /**
    * O sorteio, quando a partida é online: quem sorteia é a sala.
    *
    * Os dois clientes pedem, porque nenhum sabe se o outro pediu, e a sala é

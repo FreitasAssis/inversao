@@ -37,7 +37,13 @@ function table(initiative: Side = 'blue') {
   const blue = render(<App online={{ transport: seats.blue }} />)
   const orange = render(<App online={{ transport: seats.orange }} />)
   return {
-    room,
+    room: Object.assign(room, {
+      /** Os dois jogadores saindo, como duas abas fechadas. */
+      seatsClosed: () => {
+        seats.blue.close()
+        seats.orange.close()
+      },
+    }),
     /** Reassina o azul, como um efeito que remonta faria. */
     resubscribe: () => blue.rerender(<App online={{ transport: seats.blue }} />),
     // Os assentos crus, para um teste poder mandar o que a interface nunca
@@ -298,5 +304,22 @@ describe('as configurações numa sala', () => {
     // Pelo papel, e não pelo rótulo: "Tabuleiro" também é o nome da grade.
     expect(blue.queryByRole('combobox', { name: /mecânica/i })).not.toBeInTheDocument()
     expect(blue.queryByRole('combobox', { name: /tabuleiro/i })).not.toBeInTheDocument()
+  })
+})
+
+describe('o fim da partida', () => {
+  beforeEach(() => localStorage.clear())
+
+  test('avisa a sala, que não conhece as regras', async () => {
+    // Ela não tem como saber sozinha. É com este aviso que ela fecha quando o
+    // último sair, em vez de deixar o link abrindo uma partida acabada.
+    const { blue, orange, room, user } = table('blue')
+
+    await user.click(blue.getByRole('button', { name: /desistir/i }))
+    orange.getByRole('alert')
+
+    expect(room.join()).not.toBeNull()
+    room.seatsClosed()
+    expect(room.join()).toBeNull()
   })
 })

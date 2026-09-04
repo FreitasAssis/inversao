@@ -124,6 +124,7 @@ function parse(data: unknown): Outbound | null {
       return message as Outbound
     }
     if (message.kind === 'ready') return { kind: 'ready' }
+    if (message.kind === 'over') return { kind: 'over' }
     return null
   } catch {
     return null

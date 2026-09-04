@@ -76,6 +76,8 @@ export function createRoom(deal: Deal, config: RoomConfig): Room {
 
   /** Quem já apertou o botão de começar. */
   const readied = new Set<Side>()
+  /** A partida terminou, segundo quem estava jogando. */
+  let finished = false
 
   /** Os dois assentos ocupados. É o que a tela de espera aguarda. */
   const paired = () => taken.size === 2
@@ -109,6 +111,18 @@ export function createRoom(deal: Deal, config: RoomConfig): Room {
     log: () => log,
     join(): Transport | null {
       if (present >= ROOM_LIMIT) return null
+      /**
+       * Terminada e vazia, a sala fecha.
+       *
+       * Sem isto existe uma janela entre o último sair e o Durable Object ser
+       * evictado em que o link ainda abre — e quem abre cai numa partida
+       * acabada de outras pessoas, sem nada na tela dizendo que é isso.
+       *
+       * A condição é "acabou **e** todos saíram" de propósito: enquanto alguém
+       * está lá, quem chega ainda tem o que ver, e quem caiu ainda tem para
+       * onde voltar.
+       */
+      if (finished && taken.size === 0) return null
       present += 1
       const side = (['blue', 'orange'] as const).find((seat) => !taken.has(seat))
       const seat: Seat = side ?? 'spectator'
@@ -129,6 +143,10 @@ export function createRoom(deal: Deal, config: RoomConfig): Room {
           // Espectador não tem por onde jogar, e a regra mora aqui — não num
           // botão desabilitado em alguma tela.
           if (!open || side === undefined) return
+          if (message.kind === 'over') {
+            finished = true
+            return
+          }
           if (message.kind === 'ready') {
             readied.add(side)
             announce()

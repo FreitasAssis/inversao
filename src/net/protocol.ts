@@ -61,6 +61,18 @@ export type Outbound =
   | { kind: 'draw'; round: number }
   /** "Estou aqui e quero começar." Metade do aperto de mão. */
   | { kind: 'ready' }
+  /**
+   * "Esta partida terminou."
+   *
+   * A sala não conhece as regras, então não tem como saber sozinha — e inferir
+   * de "o log tem lances e ninguém está sentado" trancaria a sala quando os dois
+   * caíssem ao mesmo tempo, perdendo a partida com o log inteiro ali.
+   *
+   * Um cliente pode mentir e trancar cedo. O que ele ganha com isso é impedir
+   * que um espectador entre depois — nada que ele já não pudesse causar
+   * simplesmente fechando a aba.
+   */
+  | { kind: 'over' }
 
 const BOARDS = ['nbn', 'bbb', 'dbu']
 const MECHANICS = ['rotation', 'choice']

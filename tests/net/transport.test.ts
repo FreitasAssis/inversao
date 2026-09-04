@@ -396,3 +396,61 @@ describe('o aperto de mão', () => {
 /** Um lance qualquer, só para o log deixar de estar vazio. */
 const act0 = (who: { transport: Transport }) =>
   who.transport.send({ kind: 'act', action: { type: 'offerDraw' } })
+
+describe('a sala depois do fim', () => {
+  test('fecha quando acabou e todos saíram', () => {
+    // Sem isto existe uma janela entre o último sair e o Durable Object ser
+    // evictado em que o link ainda abre — e quem abre cai numa partida acabada
+    // de outras pessoas, sem nada dizendo que é isso.
+    const here = room()
+    const first = enter(here)
+    const second = enter(here)
+
+    first.transport.send({ kind: 'over' })
+    first.transport.close()
+    second.transport.close()
+
+    expect(here.join()).toBeNull()
+  })
+
+  test('segue aberta enquanto alguém está lá', () => {
+    // Quem chega ainda tem o que ver, e a revanche do passo 7 precisa disto.
+    const here = room()
+    const first = enter(here)
+    enter(here)
+
+    first.transport.send({ kind: 'over' })
+
+    expect(here.join()).not.toBeNull()
+  })
+
+  test('não fecha por todo mundo cair junto', () => {
+    // É a diferença entre "acabou" e "esvaziou". Inferir do log fecharia a sala
+    // quando os dois perdessem a rede ao mesmo tempo, perdendo a partida com o
+    // log inteiro ali do lado.
+    const here = room()
+    const first = enter(here)
+    const second = enter(here)
+    first.transport.send({ kind: 'ready' })
+    act0(first)
+
+    first.transport.close()
+    second.transport.close()
+
+    expect(here.join()).not.toBeNull()
+  })
+
+  test('quem só assiste não declara o fim', () => {
+    const here = room()
+    const first = enter(here)
+    const second = enter(here)
+    const watcher = enter(here)
+
+    watcher.transport.send({ kind: 'over' })
+    first.transport.close()
+    second.transport.close()
+    watcher.transport.close()
+
+    expect(here.join()).not.toBeNull()
+  })
+})
