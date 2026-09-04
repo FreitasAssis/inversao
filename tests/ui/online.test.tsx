@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { beforeEach, describe, expect, test } from 'vitest'
 import { render, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -295,15 +296,55 @@ describe('o que não chega a ser mandado', () => {
 describe('as configurações numa sala', () => {
   beforeEach(() => localStorage.clear())
 
-  test('não ficam ao alcance de ninguém', () => {
+  /** O `<label>` que embrulha um controle, achado pelo texto dele. */
+  const boxOf = (screen: ReturnType<typeof within>, text: RegExp) =>
+    screen.getByText(text).closest('label')
+
+  test('o que define a partida sai da tela', () => {
     // Elas não mudariam a partida — o efeito que reinicia não roda online —,
-    // mudariam só o painel e a tabela consultada, deixando a anotação falando
-    // de um tabuleiro que não é o da partida.
+    // mudariam o painel e **a tabela consultada**, deixando a anotação
+    // pós-jogo falando de um tabuleiro que não é o da partida.
     const { blue } = table('blue')
 
-    // Pelo papel, e não pelo rótulo: "Tabuleiro" também é o nome da grade.
-    expect(blue.queryByRole('combobox', { name: /mecânica/i })).not.toBeInTheDocument()
-    expect(blue.queryByRole('combobox', { name: /tabuleiro/i })).not.toBeInTheDocument()
+    expect(blue.getByText(/^mecânica$/i).closest('div')).toHaveAttribute('hidden')
+  })
+
+  test('o `hidden` precisa vencer o CSS', () => {
+    // Qualquer regra com `display` derrota o `display: none` que o navegador dá
+    // ao atributo, porque a folha dele vem antes. Foi exatamente o que
+    // aconteceu: `.setup { display: grid }` deixou mecânica, tabuleiro, abertura
+    // e nível visíveis e clicáveis dentro de uma sala — e o `hidden` já estava
+    // lá, sem efeito nenhum.
+    const css = readFileSync('src/ui/style.css', 'utf8')
+
+    expect(css).toMatch(/\[hidden\]\s*\{[^}]*display:\s*none\s*!important/)
+  })
+
+  test('some também o que não muda a partida mas não é seu', () => {
+    // Controles que não fazem nada são piores do que controles ausentes: dá
+    // para ver, dá para mexer, e nada acontece.
+    const { blue } = table('blue')
+
+    for (const text of [/empate por repetição/i, /limite de lances/i, /dois jogadores/i]) {
+      expect(boxOf(blue, text)).toHaveAttribute('hidden')
+    }
+  })
+
+  test('a barra é da sala, então também some', () => {
+    // Ligada para os dois ou para nenhum: meia barra é a assimetria que a regra
+    // existia para impedir.
+    const { blue } = table('blue')
+
+    expect(boxOf(blue, /barra de avaliação/i)).toHaveAttribute('hidden')
+  })
+
+  test('o que é de aparência continua sendo seu', () => {
+    // A sala decide a partida; a tela continua sua.
+    const { blue } = table('blue')
+
+    for (const text of [/modo sem cor/i, /velocidade/i, /^som$/i, /seu nome/i]) {
+      expect(boxOf(blue, text)).not.toHaveAttribute('hidden')
+    }
   })
 })
 

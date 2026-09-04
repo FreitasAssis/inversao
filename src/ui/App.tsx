@@ -840,7 +840,9 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700, online }: AppP
         {/* Shown rather than hidden against the AI: a control that vanishes
             never tells anybody the feature exists, and the reason it is held is
             worth reading. */}
+        {/* A barra é da sala, ligada para os dois ou para nenhum. */}
         <label
+          hidden={online !== undefined}
           title={
             mayEvaluate
               ? 'Mostra o valor exato da posição, direto da tabela de solução.'
@@ -856,7 +858,9 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700, online }: AppP
           Barra de avaliação
         </label>
 
+        {/* Numa sala isto não é seu: some, em vez de ficar clicável sem efeito. */}
         <label
+          hidden={online !== undefined}
           title="Uma posição repetida não prova que o jogo travou: com sorteio ela pode
                  voltar por acaso, e no Rodízio 54% dos turnos são forçados."
         >
@@ -880,7 +884,8 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700, online }: AppP
           />
         </label>
 
-        <label>
+        {/* Numa sala isto não é seu: some, em vez de ficar clicável sem efeito. */}
+        <label hidden={online !== undefined}>
           Limite de lances
           <input
             type="number"
@@ -915,6 +920,8 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700, online }: AppP
           />
         </label>
 
+        {/* Já some numa sala pela própria condição: `humans` é o estado local, e
+            online ele nunca chega a dois — os assentos vêm da sala. */}
         {humans.length === 2 && (
           <label>
             Nome do convidado
@@ -928,7 +935,8 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700, online }: AppP
           </label>
         )}
 
-        <label>
+        {/* Os assentos são da sala: quem senta onde é decisão dela. */}
+        <label hidden={online !== undefined}>
           <input
             type="checkbox"
             checked={seats.length === 2}
