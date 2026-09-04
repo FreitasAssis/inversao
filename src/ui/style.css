@@ -859,6 +859,28 @@ p.evaluation strong {
  * is a shape read at a glance, and the sentence underneath carries the numbers.
  */
 /*
+ * A tela de uma sala, antes de o tabuleiro aparecer. Centralizada porque não há
+ * nada para comparar com nada: é uma frase, um código e uma espera.
+ */
+.room {
+  text-align: center;
+}
+
+/*
+ * O código, e a única coisa nesta tela que vai ser lida em voz alta para outra
+ * pessoa. Monoespaçado e espaçado por isso: `K3M9` ditado letra a letra não
+ * pode depender de o leitor adivinhar onde uma acaba e a outra começa.
+ */
+.room-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--text-xl);
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  margin: var(--space-4) 0;
+  color: var(--ink);
+}
+
+/*
  * O convite para outra combinação. Fica no fim, ao lado de "Nova partida",
  * porque é a mesma decisão: jogar de novo, e como.
  */

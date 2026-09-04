@@ -8,6 +8,7 @@ import { shareText, SITE } from './share'
 import { BOARDS_FOR, BOARD_PT, MECHANIC_PT } from './labels'
 import type { CardInput } from './card'
 import { Invite } from './Invite'
+import { creationPath } from './Room'
 import { Mark } from './Mark'
 import { Evaluation } from './Evaluation'
 import { Outcome } from './Outcome'
@@ -962,6 +963,23 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700, online }: AppP
       >
         Nova partida
       </button>
+
+      {/*
+        Jogar com alguém: cria a sala com o que já está no painel e devolve o
+        link na hora. Ajustar acontece **enquanto espera**, não antes de mandar —
+        pedir decisões antes de gerar um link é atrito na única etapa que precisa
+        ser rápida.
+
+        Não aparece numa partida que já é online: dali se sai pela revanche.
+      */}
+      {online === undefined && (
+        <a
+          className="restart"
+          href={creationPath({ board, mechanic, evaluation })}
+        >
+          Jogar com alguém
+        </a>
+      )}
     </main>
   )
 }

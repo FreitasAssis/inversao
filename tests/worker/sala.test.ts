@@ -247,3 +247,27 @@ describe('the room', () => {
     expect(actions(first.heard)).toHaveLength(1)
   })
 })
+
+describe('the code', () => {
+  it('turns away letters the generator never produces', async () => {
+    // `O`, `I` and `L` are out of the alphabet because the code gets read out
+    // over the phone. Accepting them here would let a code typed with O for
+    // zero create an empty room instead of failing at once.
+    const response = await SELF.fetch('https://inversao.test/sala/K3MO', {
+      headers: { Upgrade: 'websocket' },
+    })
+
+    expect(response.status).toBe(404)
+  })
+
+  it('takes a code typed in lower case', async () => {
+    // Nobody should need the Shift key to open a link somebody read to them.
+    const code = fresh()
+    const response = await SELF.fetch(
+      `https://inversao.test/sala/${code.toLowerCase()}?${CREATE}`,
+      { headers: { Upgrade: 'websocket' } },
+    )
+
+    expect(response.status).toBe(101)
+  })
+})

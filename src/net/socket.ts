@@ -24,12 +24,25 @@ import type { Transport } from './transport'
 /** Quem abre o socket. Injetável para o teste não precisar de rede. */
 export type Open = (url: string) => WebSocketLike
 
-/** O pedaço de `WebSocket` que isto usa, e nada além. */
+/**
+ * O evento como isto o lê: só o `data`, e opcional porque `open` e `close` não
+ * têm nenhum.
+ */
+export type SocketEvent = { data?: unknown }
+
+/**
+ * O pedaço de `WebSocket` que isto usa, e nada além.
+ *
+ * Declarado aqui em vez de importado do DOM para que um teste possa passar um
+ * dublê — e largo o bastante para o `WebSocket` de verdade caber, sem conversão
+ * forçada no ponto de uso, que é onde uma incompatibilidade real deixaria de
+ * ser vista.
+ */
 export type WebSocketLike = {
   readyState: number
   send(data: string): void
   close(): void
-  addEventListener(type: 'open' | 'message' | 'close', listen: (event: never) => void): void
+  addEventListener(type: 'open' | 'message' | 'close', listen: (event: SocketEvent) => void): void
 }
 
 const OPEN = 1
@@ -69,8 +82,8 @@ export function socketTransport(open: Open, joining: Joining): Transport {
     waiting = []
   })
 
-  socket.addEventListener('message', (event: never) => {
-    const inbound = parseInbound((event as { data?: unknown }).data)
+  socket.addEventListener('message', (event) => {
+    const inbound = parseInbound(event.data)
     // Descartado em silêncio: mensagem que não é mensagem não tem a quem
     // reclamar, e derrubar a partida por causa dela seria pior.
     if (inbound === null) return

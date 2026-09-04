@@ -1,3 +1,4 @@
+import { isCode } from '../src/net/code'
 import { parseConfig } from '../src/net/protocol'
 import type { Inbound, Outbound, RoomConfig } from '../src/net/protocol'
 import { createRoom } from '../src/net/transport'
@@ -120,7 +121,11 @@ function parse(data: unknown): Outbound | null {
 export default {
   fetch(request: Request, env: Env): Promise<Response> | Response {
     const code = new URL(request.url).pathname.replace(/^\/sala\//, '').toUpperCase()
-    if (!/^[A-Z2-9]{4}$/.test(code)) return new Response('código inválido', { status: 404 })
+    // A mesma lista que gera. Estiveram separadas, e discordavam: este teste
+    // era `[A-Z2-9]{4}`, que aceita `O`, `I` e `L` — símbolos que o gerador
+    // nunca produz. Um código digitado com O no lugar de zero criava uma sala
+    // vazia em vez de falhar na hora.
+    if (!isCode(code)) return new Response('código inválido', { status: 404 })
     return env.SALA.get(env.SALA.idFromName(code)).fetch(request)
   },
 }
