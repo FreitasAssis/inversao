@@ -46,15 +46,33 @@ export type Inbound =
    * Não é lance, então não entra na lista de ações: `replayMatch` não pode
    * depender de quem estava conectado. Chega ao assinar e a cada mudança.
    *
-   * Serve a duas coisas com um sinal só — a tela de espera aguarda ele virar
-   * verdadeiro, e a queda do adversário é ele virando falso.
+   * `present` serve a duas coisas com um sinal só — a tela de espera aguarda ele
+   * virar verdadeiro, e a queda do adversário é ele virando falso.
+   *
+   * `ready` é o aperto de mão: a partida abre quando os dois confirmam. Depois
+   * do primeiro lance a sala passa a reportar os dois como prontos, e é isso que
+   * impede quem reconecta de ficar preso num aperto de mão que já aconteceu.
    */
-  | { kind: 'peer'; present: boolean }
+  | { kind: 'peer'; present: boolean; ready: Record<Side, boolean> }
 
 export type Outbound =
   | { kind: 'act'; action: Action }
   /** Pedido de sorteio da rodada. Quem sorteia é a sala, nunca o cliente. */
   | { kind: 'draw'; round: number }
+  /** "Estou aqui e quero começar." Metade do aperto de mão. */
+  | { kind: 'ready' }
+  /**
+   * "Esta partida terminou."
+   *
+   * A sala não conhece as regras, então não tem como saber sozinha — e inferir
+   * de "o log tem lances e ninguém está sentado" trancaria a sala quando os dois
+   * caíssem ao mesmo tempo, perdendo a partida com o log inteiro ali.
+   *
+   * Um cliente pode mentir e trancar cedo. O que ele ganha com isso é impedir
+   * que um espectador entre depois — nada que ele já não pudesse causar
+   * simplesmente fechando a aba.
+   */
+  | { kind: 'over' }
 
 const BOARDS = ['nbn', 'bbb', 'dbu']
 const MECHANICS = ['rotation', 'choice']
@@ -102,9 +120,11 @@ export function parseInbound(raw: unknown): Inbound | null {
   }
 
   if (message.kind === 'peer') {
-    const { present } = value as { present?: unknown }
+    const { present, ready } = value as { present?: unknown; ready?: Record<string, unknown> }
     if (typeof present !== 'boolean') return null
-    return { kind: 'peer', present }
+    if (typeof ready !== 'object' || ready === null) return null
+    if (typeof ready.blue !== 'boolean' || typeof ready.orange !== 'boolean') return null
+    return { kind: 'peer', present, ready: { blue: ready.blue, orange: ready.orange } }
   }
 
   if (message.kind === 'action') {

@@ -554,6 +554,18 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700, online }: AppP
   }, [online])
 
   /**
+   * Avisa a sala que a partida acabou.
+   *
+   * Ela não conhece as regras e não teria como saber. É com isto que ela fecha
+   * quando o último sair, em vez de deixar o link abrindo uma partida acabada
+   * até o Durable Object ser evictado.
+   */
+  useEffect(() => {
+    if (online === undefined || match.result === null) return
+    online.transport.send({ kind: 'over' })
+  }, [online, match.result])
+
+  /**
    * O sorteio, quando a partida é online: quem sorteia é a sala.
    *
    * Os dois clientes pedem, porque nenhum sabe se o outro pediu, e a sala é
@@ -660,6 +672,8 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700, online }: AppP
         onPlay={play}
         telegraph={telegraph}
         names={displayNames}
+        // Ausente fora do online: um aparelho, e quem está na vez é quem toca.
+        {...(seat !== null ? { viewer: seat } : {})}
         outcome={
           <Outcome
             result={match.result}
@@ -718,7 +732,13 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700, online }: AppP
         project has to show, and behind a gear most people would play one
         combination and never learn the others were there.
       */}
-      <div className="setup">
+      {/*
+        Numa sala, o que define a partida é da sala: quem criou escolheu, e o
+        outro recebeu isso nas boas-vindas. Deixar os controles aqui não mudaria
+        a partida — o efeito que reinicia não roda online —, mudaria só o painel
+        e a tabela consultada, deixando a anotação falando de outro tabuleiro.
+      */}
+      <div className="setup" hidden={online !== undefined}>
         <label>
           Mecânica
           <select

@@ -123,6 +123,8 @@ function parse(data: unknown): Outbound | null {
     if (message.kind === 'draw' && Number.isInteger((message as { round?: unknown }).round)) {
       return message as Outbound
     }
+    if (message.kind === 'ready') return { kind: 'ready' }
+    if (message.kind === 'over') return { kind: 'over' }
     return null
   } catch {
     return null

@@ -4,6 +4,7 @@ import { Mark } from './Mark'
 import { makeCode } from '../net/code'
 import { parseConfig } from '../net/protocol'
 import type { RoomConfig, Seat } from '../net/protocol'
+import type { Side } from '../engine/types'
 import { socketTransport } from '../net/socket'
 import type { Transport } from '../net/transport'
 import { roomPath } from './routes'
@@ -22,10 +23,10 @@ import { roomPath } from './routes'
 
 type Status =
   | { at: 'connecting' }
-  /** Sentado, e sozinho. O `App` não monta aqui — e é isso que impede a
-      partida de começar antes de haver com quem jogar. */
+  /** Sentado, esperando. O `App` não monta aqui — e é isso que impede a
+      partida de começar antes de os dois estarem prontos. */
   | { at: 'waiting'; seat: Seat }
-  /** Os dois assentos ocupados: daqui em diante quem manda é o `App`. */
+  /** Os dois confirmaram: daqui em diante quem manda é o `App`. */
   | { at: 'playing'; seat: Seat }
   /** O socket fechou antes de qualquer resposta: sala inexistente ou desfeita. */
   | { at: 'gone' }
@@ -102,8 +103,14 @@ export function Room({ code, connect, search, origin }: RoomProps) {
     })
   }, [transport, asked, here])
 
+  /** O que a sala diz sobre quem está lá e quem já confirmou. */
+  const [peers, setPeers] = useState<{ present: boolean; ready: Record<Side, boolean> }>({
+    present: false,
+    ready: { blue: false, orange: false },
+  })
+
   /**
-   * A partida só começa com os dois lá.
+   * A partida só começa com os dois lá **e os dois confirmando**.
    *
    * Sem isto, quem cria via o tabuleiro na hora — o sorteio era pedido na
    * montagem, a sala sorteava, e dava para jogar no vazio. Segurar o `App` fora
@@ -115,7 +122,9 @@ export function Room({ code, connect, search, origin }: RoomProps) {
   useEffect(
     () =>
       transport.onReceive((message) => {
-        if (message.kind !== 'peer' || !message.present) return
+        if (message.kind !== 'peer') return
+        setPeers({ present: message.present, ready: message.ready })
+        if (!message.present || !message.ready.blue || !message.ready.orange) return
         setStatus((now) => (now.at === 'waiting' ? { at: 'playing', seat: now.seat } : now))
       }),
     [transport],
@@ -138,7 +147,9 @@ export function Room({ code, connect, search, origin }: RoomProps) {
     <Waiting
       code={here}
       seat={status.at === 'waiting' ? status.seat : null}
+      peers={peers}
       tries={collisions}
+      onStart={() => transport.send({ kind: 'ready' })}
     />
   )
 }
@@ -146,23 +157,59 @@ export function Room({ code, connect, search, origin }: RoomProps) {
 function Waiting({
   code,
   seat,
+  peers,
   tries,
+  onStart,
 }: {
   code: string
   /** Null enquanto a sala não respondeu. */
   seat: Seat | null
+  peers: { present: boolean; ready: Record<Side, boolean> }
   tries: number
+  onStart: () => void
 }) {
+  const [asked, setAsked] = useState(false)
+  const playing = seat === 'blue' || seat === 'orange'
+  const theirs: Side | null = seat === 'blue' ? 'orange' : seat === 'orange' ? 'blue' : null
+  const theyAreReady = theirs !== null && peers.ready[theirs]
+
   return (
     <main className="app room">
       <Mark />
-      <h1>{seat === null ? 'Conectando' : 'Esperando o adversário'}</h1>
+      <h1>{seat === null ? 'Conectando' : peers.present ? 'Tudo pronto?' : 'Esperando o adversário'}</h1>
       <p className="room-code">{code}</p>
 
-      {seat !== null && seat !== 'spectator' && <Invitation code={code} />}
+      {/* O convite só enquanto não há ninguém: depois disso ele é ruído. */}
+      {playing && !peers.present && <Invitation code={code} />}
+
+      {playing && peers.present && (
+        <>
+          <p className="lead">
+            {theyAreReady
+              ? 'Seu oponente chegou e aguarda para iniciar a partida.'
+              : 'Seu oponente chegou.'}
+          </p>
+          {/*
+            Os dois confirmam, e não só quem entra. Um botão de um lado só
+            mudaria a assimetria de lugar: quem criou veria o tabuleiro no
+            instante em que o outro conecta, enquanto ele ainda decide.
+          */}
+          <button
+            type="button"
+            disabled={asked}
+            onClick={() => {
+              setAsked(true)
+              onStart()
+            }}
+          >
+            {asked ? 'Esperando o outro confirmar' : 'Começar'}
+          </button>
+        </>
+      )}
+
       {seat === 'spectator' && (
         <p className="lead">
-          Você vai assistir. A partida aparece assim que os dois jogadores estiverem aqui.
+          Você vai assistir. A partida aparece quando os dois jogadores confirmarem.
         </p>
       )}
 
@@ -175,11 +222,31 @@ function Waiting({
 
 function Invitation({ code }: { code: string }) {
   const link = `${globalThis.location?.origin ?? ''}${roomPath(code)}`
+  const [copied, setCopied] = useState(false)
+
   return (
-    <p className="lead">
-      Mande este endereço para quem vai jogar: <strong>{link}</strong>
-      <br />O tabuleiro aparece quando a outra pessoa entrar.
-    </p>
+    <>
+      <p className="lead">
+        Mande este endereço para quem vai jogar. O tabuleiro aparece quando a outra pessoa
+        entrar.
+      </p>
+      <p className="room-link">
+        {/* Um endereço que se lê **e** se abre: quem já está no computador certo
+            pode simplesmente clicar, e é o mesmo alvo que o botão copia. */}
+        <a href={roomPath(code)}>{link}</a>
+      </p>
+      <button
+        type="button"
+        onClick={() => {
+          // Sem `clipboard` — navegador antigo, ou página sem HTTPS — o
+          // endereço acima continua ali para selecionar à mão. Por isso o texto
+          // nunca some em favor do botão.
+          void navigator.clipboard?.writeText(link).then(() => setCopied(true))
+        }}
+      >
+        {copied ? 'Copiado' : 'Copiar o link'}
+      </button>
+    </>
   )
 }
 

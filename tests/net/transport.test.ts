@@ -343,3 +343,114 @@ describe('o teto de conexões', () => {
     expect(here.join()).toBeNull()
   })
 })
+
+describe('o aperto de mão', () => {
+  const peers = (heard: Inbound[]) =>
+    heard.filter((message) => message.kind === 'peer') as Extract<Inbound, { kind: 'peer' }>[]
+
+  test('ninguém começa pronto', () => {
+    const here = room()
+    const first = enter(here)
+    enter(here)
+
+    expect(peers(first.heard).at(-1)?.ready).toEqual({ blue: false, orange: false })
+  })
+
+  test('confirmar avisa os dois lados', () => {
+    const here = room()
+    const first = enter(here)
+    const second = enter(here)
+
+    first.transport.send({ kind: 'ready' })
+
+    expect(peers(second.heard).at(-1)?.ready).toEqual({ blue: true, orange: false })
+  })
+
+  test('espectador não confirma nada', () => {
+    // Ele não tem assento, e a partida não pode depender de quem só assiste.
+    const here = room()
+    const first = enter(here)
+    enter(here)
+    const watcher = enter(here)
+
+    watcher.transport.send({ kind: 'ready' })
+
+    expect(peers(first.heard).at(-1)?.ready).toEqual({ blue: false, orange: false })
+  })
+
+  test('depois do primeiro lance, todos leem como prontos', () => {
+    // É o que impede quem reconecta de ficar preso num aperto de mão que já
+    // aconteceu: o assento é liberado ao sair e voltaria sem a confirmação.
+    const here = room()
+    const first = enter(here)
+    enter(here)
+    first.transport.send({ kind: 'ready' })
+    act0(first)
+
+    const late = enter(here)
+
+    expect(peers(late.heard).at(-1)?.ready).toEqual({ blue: true, orange: true })
+  })
+})
+
+/** Um lance qualquer, só para o log deixar de estar vazio. */
+const act0 = (who: { transport: Transport }) =>
+  who.transport.send({ kind: 'act', action: { type: 'offerDraw' } })
+
+describe('a sala depois do fim', () => {
+  test('fecha quando acabou e todos saíram', () => {
+    // Sem isto existe uma janela entre o último sair e o Durable Object ser
+    // evictado em que o link ainda abre — e quem abre cai numa partida acabada
+    // de outras pessoas, sem nada dizendo que é isso.
+    const here = room()
+    const first = enter(here)
+    const second = enter(here)
+
+    first.transport.send({ kind: 'over' })
+    first.transport.close()
+    second.transport.close()
+
+    expect(here.join()).toBeNull()
+  })
+
+  test('segue aberta enquanto alguém está lá', () => {
+    // Quem chega ainda tem o que ver, e a revanche do passo 7 precisa disto.
+    const here = room()
+    const first = enter(here)
+    enter(here)
+
+    first.transport.send({ kind: 'over' })
+
+    expect(here.join()).not.toBeNull()
+  })
+
+  test('não fecha por todo mundo cair junto', () => {
+    // É a diferença entre "acabou" e "esvaziou". Inferir do log fecharia a sala
+    // quando os dois perdessem a rede ao mesmo tempo, perdendo a partida com o
+    // log inteiro ali do lado.
+    const here = room()
+    const first = enter(here)
+    const second = enter(here)
+    first.transport.send({ kind: 'ready' })
+    act0(first)
+
+    first.transport.close()
+    second.transport.close()
+
+    expect(here.join()).not.toBeNull()
+  })
+
+  test('quem só assiste não declara o fim', () => {
+    const here = room()
+    const first = enter(here)
+    const second = enter(here)
+    const watcher = enter(here)
+
+    watcher.transport.send({ kind: 'over' })
+    first.transport.close()
+    second.transport.close()
+    watcher.transport.close()
+
+    expect(here.join()).not.toBeNull()
+  })
+})

@@ -881,6 +881,16 @@ p.evaluation strong {
 }
 
 /*
+ * O endereço da sala. Quebra em qualquer ponto porque é longo e vai aparecer
+ * num celular, onde estourar a largura é o padrão e não a exceção.
+ */
+.room-link {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+/*
  * O convite para outra combinação. Fica no fim, ao lado de "Nova partida",
  * porque é a mesma decisão: jogar de novo, e como.
  */

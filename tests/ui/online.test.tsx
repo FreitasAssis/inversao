@@ -37,7 +37,13 @@ function table(initiative: Side = 'blue') {
   const blue = render(<App online={{ transport: seats.blue }} />)
   const orange = render(<App online={{ transport: seats.orange }} />)
   return {
-    room,
+    room: Object.assign(room, {
+      /** Os dois jogadores saindo, como duas abas fechadas. */
+      seatsClosed: () => {
+        seats.blue.close()
+        seats.orange.close()
+      },
+    }),
     /** Reassina o azul, como um efeito que remonta faria. */
     resubscribe: () => blue.rerender(<App online={{ transport: seats.blue }} />),
     // Os assentos crus, para um teste poder mandar o que a interface nunca
@@ -71,7 +77,34 @@ describe('duas telas na mesma sala', () => {
     const { blue, orange, room } = table('orange')
 
     expect(room.log().filter((message) => message.action.type === 'draw')).toHaveLength(1)
-    expect(blue.getByRole('status').textContent).toBe(orange.getByRole('status').textContent)
+    expect(blue.getByRole('status')).toHaveTextContent(/laranja/i)
+    expect(orange.getByRole('status')).toHaveTextContent(/laranja/i)
+  })
+
+  test('cada tela fala do seu ponto de vista', () => {
+    // Não é a mesma frase nas duas, e não deveria ser: quem tem a iniciativa é
+    // convidado a escolher, e quem espera é informado de que o outro escolhe.
+    const { blue, orange } = table('orange')
+
+    expect(orange.getByRole('status')).toHaveTextContent(/escolha uma peça/i)
+    expect(blue.getByRole('status')).toHaveTextContent(/está escolhendo/i)
+  })
+
+  test('não anuncia uma peça que ninguém nomeou', () => {
+    // O texto caía num `?? 'circle'` e dizia "movendo o círculo" na tela de quem
+    // estava esperando — em toda rodada, sobre um símbolo inexistente.
+    const { blue } = table('orange')
+
+    expect(blue.getByRole('status')).not.toHaveTextContent(/movendo/i)
+  })
+
+  test('não deixa nomear a peça do adversário', () => {
+    // Cada tela guarda a própria escolha até o lance sair, então sem isto os
+    // dois nomeavam e cada um via um símbolo diferente — nenhum deles podendo
+    // jogar.
+    const { blue } = table('orange')
+
+    expect(blue.getByRole('gridcell', { name: /^D1,/ })).not.toHaveAttribute('data-nameable')
   })
 
   test('o lance de um aparece no outro', async () => {
@@ -256,5 +289,37 @@ describe('o que não chega a ser mandado', () => {
 
     expect(late.getByRole('gridcell', { name: /^B1,/ })).toHaveAttribute('data-side', 'blue')
     expect(seen(late)).toBe(seen(first))
+  })
+})
+
+describe('as configurações numa sala', () => {
+  beforeEach(() => localStorage.clear())
+
+  test('não ficam ao alcance de ninguém', () => {
+    // Elas não mudariam a partida — o efeito que reinicia não roda online —,
+    // mudariam só o painel e a tabela consultada, deixando a anotação falando
+    // de um tabuleiro que não é o da partida.
+    const { blue } = table('blue')
+
+    // Pelo papel, e não pelo rótulo: "Tabuleiro" também é o nome da grade.
+    expect(blue.queryByRole('combobox', { name: /mecânica/i })).not.toBeInTheDocument()
+    expect(blue.queryByRole('combobox', { name: /tabuleiro/i })).not.toBeInTheDocument()
+  })
+})
+
+describe('o fim da partida', () => {
+  beforeEach(() => localStorage.clear())
+
+  test('avisa a sala, que não conhece as regras', async () => {
+    // Ela não tem como saber sozinha. É com este aviso que ela fecha quando o
+    // último sair, em vez de deixar o link abrindo uma partida acabada.
+    const { blue, orange, room, user } = table('blue')
+
+    await user.click(blue.getByRole('button', { name: /desistir/i }))
+    orange.getByRole('alert')
+
+    expect(room.join()).not.toBeNull()
+    room.seatsClosed()
+    expect(room.join()).toBeNull()
   })
 })

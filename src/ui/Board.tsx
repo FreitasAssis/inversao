@@ -119,6 +119,15 @@ export type BoardProps = Readonly<{
   outcome?: ReactNode
   /** What to call each side. Falls back to the colour when left blank. */
   names?: Partial<Record<Side, string>>
+  /**
+   * De quem é esta tela, quando há mais de uma.
+   *
+   * Ausente é o caso local: um aparelho, e quem está na vez é quem toca. Online
+   * cada um tem a sua, e sem isto o adversário consegue **nomear a sua peça** —
+   * cada tela mostrando um símbolo escolhido diferente, e nenhuma delas
+   * podendo jogar.
+   */
+  viewer?: Side | 'spectator' | undefined
 }>
 
 export function Board({
@@ -127,6 +136,7 @@ export function Board({
   telegraph = null,
   outcome = null,
   names,
+  viewer,
 }: BoardProps) {
   const naming = (side: Side) => names?.[side]?.trim() || SIDE_PT[side]
   // Where the piece standing here came from, so it can slide in from there.
@@ -139,10 +149,16 @@ export function Board({
   // A new round clears any half-finished naming.
   useEffect(() => setNamed(null), [match.actions.length])
 
-  const namer = view.awaitingName ? view.mover : null
+  // Só nomeia quem está na vez — e, havendo mais de uma tela, só na dela.
+  const mine = viewer === undefined || viewer === view.mover
+  const namer = view.awaitingName && mine ? view.mover : null
   const active = view.active ?? (namer && named ? pieceOf(match, namer, named) : null)
   const legal =
-    namer && named ? legalMoves(match.config.board, match.placement, namer, named) : view.legal
+    namer && named
+      ? legalMoves(match.config.board, match.placement, namer, named)
+      : mine
+        ? view.legal
+        : []
   const stuck = active !== null && legal.length === 0
 
   /**
@@ -184,6 +200,10 @@ export function Board({
         ? `${who} nomeia o ${passing}, que não tem lance: você joga o ${passing}.`
         : `${who} passa: o ${passing} não tem lance legal.`
     }
+    // Quem está do outro lado vê o adversário escolhendo — e não um símbolo que
+    // ninguém nomeou. Sem esta linha o texto caía no `?? 'circle'` lá embaixo e
+    // anunciava "movendo o círculo" em toda rodada, na tela errada.
+    if (view.awaitingName && !mine) return `${who} está escolhendo a peça.`
     if (namer !== null && named === null) return `Iniciativa: ${who}. Escolha uma peça.`
     const piece = PIECE_PT[active?.piece ?? 'circle']
     if (stuck) return `${who} passa: o ${piece} não tem lance legal.`
@@ -293,7 +313,7 @@ export function Board({
         ))}
       </div>
 
-      {stuck && active && (
+      {stuck && active && mine && (
         <button type="button" onClick={() => onPlay({ type: 'pass', piece: active.piece })}>
           Passar
         </button>
