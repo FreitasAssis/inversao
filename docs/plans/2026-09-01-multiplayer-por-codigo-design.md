@@ -281,25 +281,25 @@ Durable Object, que conexões tenham papel e só algumas tenham assento.
 2. ✅ O resultado `abandonment` nos quatro lugares que ele toca.
 3. ✅ Dois `App` num teste, jogando uma partida inteira pelo transporte local.
 4. ✅ O Durable Object em Miniflare, sem cliente.
-5. 🔶 O transporte de rede, ligando os dois. **Falta a tela de criar/entrar e a rota.**
-6. Queda, contagem, reconexão.
-7. Revanche, espectador na interface, e o nome de cada lado trafegando.
+5. ✅ O transporte de rede, ligando os dois.
+6. 🔶 Queda, contagem, reconexão. **A reconexão está feita** (crachá do assento);
+   falta o aviso de queda: a contagem de sessenta segundos e o botão de encerrar.
+7. 🔶 Revanche, espectador na interface, e o nome de cada lado trafegando.
+   **Nome e espectador estão feitos**; falta a revanche.
 
-Parado dentro do passo 5, com 683 testes. O que existe:
+Uma partida online **acontece de ponta a ponta**, testada com dois aparelhos. 791 testes.
 
-| arquivo | o que faz |
-|---|---|
-| `src/net/wire.ts` | autoria e ordem, antes do motor |
-| `src/net/protocol.ts` | o envelope e os leitores do que chega |
-| `src/net/transport.ts` | a interface e a sala em memória |
-| `src/net/socket.ts` | o `Transport` sobre WebSocket |
-| `worker/index.ts` | a sala como Durable Object |
-| `src/ui/App.tsx` | aceita uma sala pela prop `online` |
+O que falta para fechar a #4:
 
-**O que falta para uma partida online acontecer de ponta a ponta:** a rota
-`/sala/CODE`, a tela de criar e entrar, e o `App` sendo montado com um
-`socketTransport` em vez de um da memória. Nada disso mexe no fio — é a casca
-que ainda não existe.
+- **o aviso de queda** — hoje quem fica não recebe nada enquanto o outro está fora, e a
+  tela dele segue dizendo "Vez de Laranja" indefinidamente;
+- **a revanche** — e com ela a decisão de quando a sala deve morrer, que fica muito mais
+  clara tendo esse caso na mão.
+
+Uma aspereza conhecida: quem abre o link de uma sala trancada espera **quatro segundos**
+olhando "Conectando" antes de ver "Sala não encontrada". O socket fecha na hora, mas a tela
+só descobre pelo relógio de segurança. O passo 6 resolve junto — ali o transporte vai
+precisar avisar a queda de qualquer jeito, e o mesmo sinal serve aos dois casos.
 
 **Este documento não sobrevive ao fim.** Quando os sete passos fecharem, o que valer a pena
 vai para a seção 6 de `docs/projeto.md` — que é onde o multiplayer é descrito — e
@@ -506,6 +506,55 @@ convincente possível.
 `src/net/socket.ts` usa `location` e o `WebSocket` do DOM, e está **excluído** do
 `tsconfig.worker.json`. Não é arrumação: se alguém importá-lo do servidor, o `tsc` segue o
 import e reclama, que é exatamente o aviso desejado.
+
+### 9.13 As duas implementações de `Transport` discordavam
+
+A sala em memória reentregava tudo a quem assinava; a de rede não reentregava nada. Na tela
+isso era **não conseguir mover peça nenhuma**: o `Room` consumia as boas-vindas, o `App`
+montava depois e nunca descobria de que lado estava.
+
+Nenhum dos 731 testes pegou, porque **todos usavam a sala em memória** — a mesma que eu havia
+descrito como "não é um dublê simplificado, é a coisa com outro transporte". Era falso neste
+ponto. Existe agora um teste de contrato rodando as mesmas asserções contra as duas.
+
+### 9.14 O servidor não distingue conexão morta de conexão calada
+
+Fechar a aba manda um quadro de fechamento e o assento é liberado; matar o navegador, o
+celular suspender a aba ou a rede cair não mandam nada. O assento fica ocupado por um
+fantasma, e quem volta vira **espectador da própria partida**.
+
+A saída é o **crachá do assento**: um identificador aleatório que o navegador cria, guarda em
+`localStorage` — porque o caso é justamente o navegador fechado — e devolve na conexão. Com
+ele, voltar reivindica o mesmo lado e despeja o fantasma.
+
+### 9.15 O `hidden` não vence CSS
+
+`.setup { display: grid }` derrotava o `display: none` que o navegador dá ao atributo, porque
+a folha dele vem antes. A configuração da partida seguiu clicável dentro de uma sala por um
+PR inteiro, com o `hidden` já lá e sem efeito.
+
+Consertado na raiz com `[hidden] { display: none !important }`.
+
+### 9.16 Exibição contaminando afirmação, duas vezes
+
+O mesmo erro em dois lugares, e vale como padrão a vigiar:
+
+- `stuck` saía dos destinos **marcados**, e a tela de quem espera não marca nenhum — então
+  toda vez do adversário lia "não tem lance legal";
+- o texto usava `active?.piece ?? 'circle'`, e na tela de quem espera `active` é nulo — então
+  ela anunciava "movendo o círculo" sobre um símbolo que ninguém nomeou.
+
+**Quando algo é filtrado para a tela, é preciso checar quem mais lê aquela variável.** Poder
+mover e dizer que a peça está travada são perguntas diferentes: uma é fato da posição, a
+outra é escolha de exibição.
+
+### 9.17 O nome viaja fora da lista de ações
+
+Na conexão e na presença, nunca como ação — a lista é o que `replayMatch` executa, e ela não
+pode depender de metadados de sala. Numa sala **inclusive o seu nome** vem de lá, para as
+duas telas contarem a mesma partida em vez de cada uma usar a própria fonte.
+
+O `maxLength` do campo é sugestão para quem digita: o corte é refeito ao sentar.
 
 ### 9.12 A sala não hiberna, e isso é uma escolha
 
