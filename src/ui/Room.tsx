@@ -8,6 +8,7 @@ import type { Side } from '../engine/types'
 import { socketTransport } from '../net/socket'
 import type { Transport } from '../net/transport'
 import { roomPath } from './routes'
+import { environment, readSettings } from './settings'
 
 /**
  * A tela de uma sala: conectar, esperar o adversário, e então sair da frente.
@@ -38,6 +39,7 @@ export type RoomProps = Readonly<{
     code: string
     config?: RoomConfig | undefined
     token?: string | undefined
+    name?: string | undefined
   }) => Transport
   search?: string
   origin?: string
@@ -49,6 +51,7 @@ const browserConnect =
     code: string
     config?: RoomConfig | undefined
     token?: string | undefined
+    name?: string | undefined
   }): Transport =>
     socketTransport((url) => new WebSocket(url), { ...joining, origin })
 
@@ -103,7 +106,12 @@ export function Room({ code, connect, search, origin }: RoomProps) {
   const transport = useMemo(
     () => {
       const token = tokenFor(here)
-      return open(asked === null ? { code: here, token } : { code: here, config: asked, token })
+      // O nome vem das configurações porque é onde ele já mora, e viaja na
+      // conexão porque a sala precisa dele na hora de sentar — para já contar
+      // aos outros quem chegou.
+      const name = readSettings(environment()).playerName.trim()
+      const joining = { code: here, token, name }
+      return open(asked === null ? joining : { ...joining, config: asked })
     },
     // Uma conexão por código. `open` e `asked` são estáveis por montagem, e
     // listá-los faria o socket ser refeito a cada render.

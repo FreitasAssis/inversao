@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import { createRoom, ROOM_LIMIT } from '../../src/net/transport'
 import type { Transport } from '../../src/net/transport'
+import { NAME_LIMIT } from '../../src/net/protocol'
 import type { Inbound, RoomConfig } from '../../src/net/protocol'
 import type { SequencedAction } from '../../src/net/wire'
 import { admits } from '../../src/net/wire'
@@ -536,5 +537,56 @@ describe('voltar ao próprio assento', () => {
     here.join('cracha')?.onReceive((message) => heard.push(message))
 
     expect(welcome(heard).seat).toBe('blue')
+  })
+})
+
+describe('como cada lado se chama', () => {
+  const namesIn = (heard: Inbound[]) =>
+    (heard.filter((m) => m.kind === 'peer') as Extract<Inbound, { kind: 'peer' }>[]).at(-1)?.names
+
+  test('a sala conta o nome dos dois', () => {
+    // Sem isto, quem digitou "Luiz" via "Vitória de Luiz" e o outro via
+    // "Vitória de Azul" — duas telas contando a mesma partida com nomes
+    // diferentes.
+    const here = room()
+    const blue = here.join('c1', 'Luiz')
+    const heard: Inbound[] = []
+    blue?.onReceive((message) => heard.push(message))
+    here.join('c2', 'Ana')?.onReceive(() => {})
+
+    expect(namesIn(heard)).toEqual({ blue: 'Luiz', orange: 'Ana' })
+  })
+
+  test('sem nome digitado, fica vazio', () => {
+    // Quem preenche o buraco é a tela, com a cor. A sala não inventa nome.
+    const here = room()
+    const blue = here.join('c1')
+    const heard: Inbound[] = []
+    blue?.onReceive((message) => heard.push(message))
+
+    expect(namesIn(heard)).toEqual({ blue: '', orange: '' })
+  })
+
+  test('corta o nome grande demais', () => {
+    // O `maxLength` do campo é sugestão para quem digita; um cliente que não
+    // use a nossa tela não passa por ele.
+    const here = room()
+    const blue = here.join('c1', 'x'.repeat(200))
+    const heard: Inbound[] = []
+    blue?.onReceive((message) => heard.push(message))
+
+    expect(namesIn(heard)?.blue).toHaveLength(NAME_LIMIT)
+  })
+
+  test('espectador não batiza ninguém', () => {
+    const here = room()
+    const blue = here.join('c1', 'Luiz')
+    const heard: Inbound[] = []
+    blue?.onReceive((message) => heard.push(message))
+    here.join('c2', 'Ana')?.onReceive(() => {})
+
+    here.join('c3', 'Intruso')?.onReceive(() => {})
+
+    expect(namesIn(heard)).toEqual({ blue: 'Luiz', orange: 'Ana' })
   })
 })

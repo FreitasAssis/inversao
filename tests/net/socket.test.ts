@@ -80,6 +80,24 @@ describe('o endereço', () => {
     )
   })
 
+  test('leva o nome de quem está entrando', () => {
+    // É por ele que as duas telas contam a mesma partida. A sala precisa dele
+    // na hora de sentar, para já contar aos outros quem chegou.
+    expect(addressOf({ code: 'K3M9', name: 'Luiz', origin: 'ws://t' })).toBe(
+      'ws://t/sala/K3M9?n=Luiz',
+    )
+  })
+
+  test('escapa o que precisa ser escapado', () => {
+    // Um nome com `&` partiria a query em duas.
+    expect(addressOf({ code: 'K3M9', name: 'A & B', origin: 'ws://t' })).toContain('n=A%20%26%20B')
+  })
+
+  test('não leva nome vazio', () => {
+    // Quem preenche o buraco é a tela, com a cor. Mandar vazio é ruído.
+    expect(addressOf({ code: 'K3M9', name: '', origin: 'ws://t' })).not.toContain('n=')
+  })
+
   test('não leva configuração nenhuma para quem entra', () => {
     // Quem entra recebe a da sala. Mandar a própria faria o link de convite
     // criar uma sala nova em vez de entrar na que existe.

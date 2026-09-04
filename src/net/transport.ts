@@ -1,5 +1,6 @@
 import type { Action } from '../engine/match'
 import type { Side } from '../engine/types'
+import { NAME_LIMIT } from './protocol'
 import type { Inbound, Outbound, RoomConfig, Seat } from './protocol'
 import type { SequencedAction } from './wire'
 
@@ -44,7 +45,7 @@ export type Room = {
    * segurança: sem ele, abrir mil conexões num código conhecido é um pedido de
    * memória e de duração que ninguém precisa autenticar para fazer.
    */
-  join(token?: string): Transport | null
+  join(token?: string, name?: string): Transport | null
   /** O que quem reconecta recebe: a partida é isto mais o estado inicial. */
   log(): readonly SequencedAction[]
 }
@@ -78,6 +79,8 @@ export function createRoom(deal: Deal, config: RoomConfig): Room {
   let present = 0
   /** Qual assento cada crachá guarda. */
   const holders = new Map<string, Side>()
+  /** Como cada lado se chama, para as duas telas dizerem o mesmo. */
+  const names: Record<Side, string> = { blue: '', orange: '' }
   /** Como despejar quem está sentado agora, por lado. */
   const seated = new Map<Side, () => void>()
   /** Todo mundo que está ouvindo, com ou sem assento. */
@@ -104,6 +107,7 @@ export function createRoom(deal: Deal, config: RoomConfig): Room {
       kind: 'peer',
       present: paired(),
       ready: { blue: ready('blue'), orange: ready('orange') },
+      names: { ...names },
     }
     for (const listen of [...listeners]) listen(message)
   }
@@ -118,7 +122,7 @@ export function createRoom(deal: Deal, config: RoomConfig): Room {
 
   return {
     log: () => log,
-    join(token?: string): Transport | null {
+    join(token?: string, name?: string): Transport | null {
       // Reivindicação antes do teto: quem volta ao próprio assento libera o
       // lugar do fantasma no mesmo gesto, e não pode esbarrar num limite que
       // ele mesmo estava ocupando.
@@ -145,6 +149,9 @@ export function createRoom(deal: Deal, config: RoomConfig): Room {
         taken.add(side)
         // O crachá passa a guardar este assento, e é com ele que se volta.
         if (token !== undefined) holders.set(token, side)
+        // Cortado aqui também, e não só no campo: o `maxLength` é sugestão para
+        // quem digita, e um cliente que não use a nossa tela não passa por ele.
+        if (name !== undefined) names[side] = name.slice(0, NAME_LIMIT).trim()
       }
       const first = !established
       established = true
@@ -221,6 +228,7 @@ export function createRoom(deal: Deal, config: RoomConfig): Room {
             kind: 'peer',
             present: paired(),
             ready: { blue: ready('blue'), orange: ready('orange') },
+            names: { ...names },
           })
           for (const message of log) listen({ kind: 'action', message })
           listeners = [...listeners, listen]

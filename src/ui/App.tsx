@@ -266,6 +266,15 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700, online }: AppP
    */
   const [seat, setSeat] = useState<Seat | null>(null)
 
+  /**
+   * Como a **sala** chama cada lado.
+   *
+   * Sem isto, quem digitou "Luiz" via "Vitória de Luiz" e o outro via "Vitória
+   * de Azul" — duas telas contando a mesma partida com nomes diferentes, e o
+   * card levando o que só uma delas sabia.
+   */
+  const [roomNames, setRoomNames] = useState<Record<Side, string> | null>(null)
+
   const [match, setMatch] = useState<Match>(() => restored?.match ?? startMatch(config))
   const [matchSeed, setMatchSeed] = useState(() => restored?.seed ?? seed ?? Date.now())
 
@@ -311,6 +320,9 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700, online }: AppP
    * from the wire instead of from storage.
    */
   const nameOf = (side: Side): string => {
+    // Numa sala o nome é o que a sala diz, inclusive o seu: assim as duas telas
+    // contam a mesma partida.
+    if (roomNames !== null) return roomNames[side].trim() || COLOUR_PT[side]
     if (!isHuman(side)) return AI_NAME
     const typed = side === 'blue' ? playerName : guestName
     return typed.trim() || COLOUR_PT[side]
@@ -530,8 +542,12 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700, online }: AppP
         return
       }
 
-      // Presença não é lance: quem cuida dela é a tela da sala, e o `App` não
-      // tem o que fazer com ela enquanto a partida está de pé.
+      if (inbound.kind === 'peer') {
+        // A única coisa da presença que interessa aqui: como cada lado se
+        // chama. O resto é da tela da sala.
+        setRoomNames(inbound.names)
+        return
+      }
       if (inbound.kind !== 'action') return
 
       const message = inbound.message

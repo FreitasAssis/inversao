@@ -56,8 +56,10 @@ export class Sala {
 
     // O crachá do assento vem no endereço, e é o que faz alguém voltar ao próprio
     // lugar em vez de virar espectador da própria partida.
-    const token = new URL(request.url).searchParams.get('t') ?? undefined
-    const transport = this.room.join(token)
+    const query = new URL(request.url).searchParams
+    const token = query.get('t') ?? undefined
+    const name = query.get('n') ?? undefined
+    const transport = this.room.join(token, name)
     if (transport === null) {
       // Sala lotada. O teto é folgado e existe só por segurança: sem ele, um
       // código conhecido é tudo o que alguém precisa para abrir conexões até

@@ -24,6 +24,15 @@ export type RoomConfig = {
   evaluation: boolean
 }
 
+/**
+ * O maior nome que a sala aceita.
+ *
+ * O mesmo `maxLength` do campo, aplicado de novo no servidor: o campo é
+ * sugestão para quem digita, e um cliente que não use a nossa tela não passa
+ * por ele.
+ */
+export const NAME_LIMIT = 20
+
 /** Espectador é um papel, não um assento vazio. */
 export type Seat = Side | 'spectator'
 
@@ -53,7 +62,19 @@ export type Inbound =
    * do primeiro lance a sala passa a reportar os dois como prontos, e é isso que
    * impede quem reconecta de ficar preso num aperto de mão que já aconteceu.
    */
-  | { kind: 'peer'; present: boolean; ready: Record<Side, boolean> }
+  | {
+      kind: 'peer'
+      present: boolean
+      ready: Record<Side, boolean>
+      /**
+       * Como cada lado se chama. Vazio quando ninguém digitou nada.
+       *
+       * Viaja aqui, e **não** na lista de ações. É tentador pô-lo lá, porque
+       * tudo o mais está — mas a lista é o que `replayMatch` executa, e ela não
+       * pode depender de metadados de sala. Nome é da conexão, e some com ela.
+       */
+      names: Record<Side, string>
+    }
 
 export type Outbound =
   | { kind: 'act'; action: Action }
@@ -124,7 +145,15 @@ export function parseInbound(raw: unknown): Inbound | null {
     if (typeof present !== 'boolean') return null
     if (typeof ready !== 'object' || ready === null) return null
     if (typeof ready.blue !== 'boolean' || typeof ready.orange !== 'boolean') return null
-    return { kind: 'peer', present, ready: { blue: ready.blue, orange: ready.orange } }
+    const { names } = value as { names?: Record<string, unknown> }
+    if (typeof names !== 'object' || names === null) return null
+    if (typeof names.blue !== 'string' || typeof names.orange !== 'string') return null
+    return {
+      kind: 'peer',
+      present,
+      ready: { blue: ready.blue, orange: ready.orange },
+      names: { blue: names.blue, orange: names.orange },
+    }
   }
 
   if (message.kind === 'action') {
