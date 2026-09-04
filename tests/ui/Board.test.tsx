@@ -487,3 +487,54 @@ describe('telegraphFor', () => {
     expect(telegraphFor(match, action, 'blue')).toBeNull()
   })
 })
+
+/**
+ * Online cada jogador tem a sua tela, e o tabuleiro precisa saber de quem ela é.
+ *
+ * Sem isso, o adversário nomeava a **sua** peça: cada tela guardava a própria
+ * escolha até o lance sair, então as duas mostravam símbolos diferentes e
+ * nenhuma conseguia jogar.
+ */
+describe('a tela de quem espera', () => {
+  const boxed = () =>
+    ({
+      ...startMatch({ board: 'dbu', mechanic: 'rotation', opening: 'circle' }),
+      placement: { blue: [0, 1, 3], orange: [9, 10, 11] },
+    }) as Match
+
+  test('não marca destino nenhum', () => {
+    // Um destino marcado é um convite a tocar, e tocar ali não faz nada.
+    const { container } = render(
+      <Board match={rodizio()} onPlay={() => {}} viewer="orange" />,
+    )
+
+    expect(container.querySelectorAll('[data-legal]')).toHaveLength(0)
+  })
+
+  test('marca os destinos na tela de quem joga', () => {
+    const { container } = render(<Board match={rodizio()} onPlay={() => {}} viewer="blue" />)
+
+    expect(container.querySelectorAll('[data-legal]').length).toBeGreaterThan(0)
+  })
+
+  test('não oferece passar pelo adversário', () => {
+    render(<Board match={boxed()} onPlay={() => {}} viewer="orange" />)
+
+    expect(screen.queryByRole('button', { name: /passar/i })).toBeNull()
+  })
+
+  test('oferece passar a quem está preso', () => {
+    render(<Board match={boxed()} onPlay={() => {}} viewer="blue" />)
+
+    expect(screen.getByRole('button', { name: /passar/i })).toBeInTheDocument()
+  })
+
+  test('quem assiste não joga por ninguém', () => {
+    const { container } = render(
+      <Board match={rodizio()} onPlay={() => {}} viewer="spectator" />,
+    )
+
+    expect(container.querySelectorAll('[data-legal]')).toHaveLength(0)
+    expect(container.querySelectorAll('[data-nameable]')).toHaveLength(0)
+  })
+})

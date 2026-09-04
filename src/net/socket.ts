@@ -73,6 +73,19 @@ export function addressOf({ code, config, origin }: Joining): string {
 export function socketTransport(open: Open, joining: Joining): Transport {
   const socket = open(addressOf(joining))
   let listeners: ((message: Inbound) => void)[] = []
+  /**
+   * Tudo o que já chegou, para quem assinar depois.
+   *
+   * **É contrato, não otimização.** A sala em memória sempre reentregou, e este
+   * transporte não — e a diferença só apareceu jogando: o `Room` consome as
+   * boas-vindas, o `App` monta quando os dois jogadores estão lá, e assinando
+   * depois nunca descobria de que lado estava. Na tela, isso era não conseguir
+   * mover peça nenhuma.
+   *
+   * Pior no caso de entrar no meio: o log inteiro passaria antes de o `App`
+   * existir, e o contador de sequência dele ficaria para sempre atrás da sala.
+   */
+  const said: Inbound[] = []
   /** O que foi pedido antes de o socket abrir. */
   let waiting: string[] = []
   let closed = false
@@ -87,6 +100,7 @@ export function socketTransport(open: Open, joining: Joining): Transport {
     // Descartado em silêncio: mensagem que não é mensagem não tem a quem
     // reclamar, e derrubar a partida por causa dela seria pior.
     if (inbound === null) return
+    said.push(inbound)
     for (const listen of [...listeners]) listen(inbound)
   })
 
@@ -102,6 +116,7 @@ export function socketTransport(open: Open, joining: Joining): Transport {
       else waiting.push(raw)
     },
     onReceive(listen) {
+      for (const message of said) listen(message)
       listeners = [...listeners, listen]
       return () => {
         listeners = listeners.filter((one) => one !== listen)
@@ -111,6 +126,7 @@ export function socketTransport(open: Open, joining: Joining): Transport {
       closed = true
       listeners = []
       waiting = []
+      said.length = 0
       socket.close()
     },
   }

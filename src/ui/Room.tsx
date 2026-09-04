@@ -175,11 +175,31 @@ function Waiting({
 
 function Invitation({ code }: { code: string }) {
   const link = `${globalThis.location?.origin ?? ''}${roomPath(code)}`
+  const [copied, setCopied] = useState(false)
+
   return (
-    <p className="lead">
-      Mande este endereço para quem vai jogar: <strong>{link}</strong>
-      <br />O tabuleiro aparece quando a outra pessoa entrar.
-    </p>
+    <>
+      <p className="lead">
+        Mande este endereço para quem vai jogar. O tabuleiro aparece quando a outra pessoa
+        entrar.
+      </p>
+      <p className="room-link">
+        {/* Um endereço que se lê **e** se abre: quem já está no computador certo
+            pode simplesmente clicar, e é o mesmo alvo que o botão copia. */}
+        <a href={roomPath(code)}>{link}</a>
+      </p>
+      <button
+        type="button"
+        onClick={() => {
+          // Sem `clipboard` — navegador antigo, ou página sem HTTPS — o
+          // endereço acima continua ali para selecionar à mão. Por isso o texto
+          // nunca some em favor do botão.
+          void navigator.clipboard?.writeText(link).then(() => setCopied(true))
+        }}
+      >
+        {copied ? 'Copiado' : 'Copiar o link'}
+      </button>
+    </>
   )
 }
 

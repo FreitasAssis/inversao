@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { act, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { Room, creationPath } from '../../src/ui/Room'
 import { createRoom } from '../../src/net/transport'
 import type { Room as Sala, Transport } from '../../src/net/transport'
@@ -252,5 +253,60 @@ describe('o endereço de criação', () => {
 
   test('marca a barra quando ela está ligada', () => {
     expect(creationPath({ ...CONFIG, evaluation: true }, () => 0)).toContain('e=1')
+  })
+})
+
+describe('o convite', () => {
+  beforeEach(() => localStorage.clear())
+
+  test('o endereço é um link, e não só texto', () => {
+    // Quem já está no computador certo simplesmente clica.
+    const sala = createRoom(always('blue'), CONFIG)
+    const { connect } = wire(sala)
+    render(<Room code="K3M9" search={CREATING} connect={connect} />)
+
+    expect(screen.getByRole('link', { name: /\/sala\/K3M9/ })).toHaveAttribute(
+      'href',
+      '/sala/K3M9',
+    )
+  })
+
+  test('copia o endereço quando pedido', async () => {
+    const copied: string[] = []
+    // A ordem importa: `userEvent.setup()` instala o **próprio** dublê de
+    // `navigator.clipboard`, então instalar o nosso antes dele é instalar para
+    // ninguém — e o teste passava a medir o dublê da biblioteca.
+    const user = userEvent.setup()
+    // `defineProperty` e não `Object.assign`: `navigator.clipboard` é um
+    // acessor só de leitura, e atribuir a ele não substitui nada.
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: async (text: string) => {
+          copied.push(text)
+        },
+      },
+    })
+    const sala = createRoom(always('blue'), CONFIG)
+    const { connect } = wire(sala)
+    render(<Room code="K3M9" search={CREATING} connect={connect} />)
+
+    await user.click(screen.getByRole('button', { name: /copiar/i }))
+
+    // A confirmação é o que espera a promessa da área de transferência, e é
+    // também o que o usuário precisa ver: sem ela, clicar não produz efeito
+    // visível nenhum e parece quebrado.
+    expect(await screen.findByRole('button', { name: /copiado/i })).toBeInTheDocument()
+    expect(copied[0]).toContain('/sala/K3M9')
+  })
+
+  test('não esconde o endereço atrás do botão', () => {
+    // Sem `clipboard` — navegador antigo, ou página sem HTTPS — o botão não faz
+    // nada. O texto continua ali para selecionar à mão.
+    const sala = createRoom(always('blue'), CONFIG)
+    const { connect } = wire(sala)
+    render(<Room code="K3M9" search={CREATING} connect={connect} />)
+
+    expect(screen.getByText(/\/sala\/K3M9/)).toBeVisible()
   })
 })

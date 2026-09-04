@@ -660,6 +660,8 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700, online }: AppP
         onPlay={play}
         telegraph={telegraph}
         names={displayNames}
+        // Ausente fora do online: um aparelho, e quem está na vez é quem toca.
+        {...(seat !== null ? { viewer: seat } : {})}
         outcome={
           <Outcome
             result={match.result}
@@ -718,7 +720,13 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700, online }: AppP
         project has to show, and behind a gear most people would play one
         combination and never learn the others were there.
       */}
-      <div className="setup">
+      {/*
+        Numa sala, o que define a partida é da sala: quem criou escolheu, e o
+        outro recebeu isso nas boas-vindas. Deixar os controles aqui não mudaria
+        a partida — o efeito que reinicia não roda online —, mudaria só o painel
+        e a tabela consultada, deixando a anotação falando de outro tabuleiro.
+      */}
+      <div className="setup" hidden={online !== undefined}>
         <label>
           Mecânica
           <select
