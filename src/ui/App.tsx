@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react'
 import { Board, PIECE_PT, telegraphFor } from './Board'
 import type { Telegraph } from './Board'
 import { Annotation } from './Annotation'
+import { Away } from './Away'
 import { ShareButton } from './ShareButton'
 import { shareText, SITE } from './share'
 import { BOARDS_FOR, BOARD_PT, MECHANIC_PT } from './labels'
@@ -275,6 +276,15 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700, online }: AppP
    */
   const [roomNames, setRoomNames] = useState<Record<Side, string> | null>(null)
 
+  /**
+   * O adversário está na sala.
+   *
+   * Começa em `true` porque o `App` só monta depois do aperto de mão — antes
+   * dele quem cuida da espera é a tela da sala. Assumir `false` aqui piscaria
+   * "desconectou" no primeiro quadro de toda partida.
+   */
+  const [together, setTogether] = useState(true)
+
   const [match, setMatch] = useState<Match>(() => restored?.match ?? startMatch(config))
   const [matchSeed, setMatchSeed] = useState(() => restored?.seed ?? seed ?? Date.now())
 
@@ -543,9 +553,8 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700, online }: AppP
       }
 
       if (inbound.kind === 'peer') {
-        // A única coisa da presença que interessa aqui: como cada lado se
-        // chama. O resto é da tela da sala.
         setRoomNames(inbound.names)
+        setTogether(inbound.present)
         return
       }
       if (inbound.kind !== 'action') return
@@ -691,12 +700,22 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700, online }: AppP
         // Ausente fora do online: um aparelho, e quem está na vez é quem toca.
         {...(seat !== null ? { viewer: seat } : {})}
         outcome={
+          // A queda vem por cima do tabuleiro, no mesmo lugar do resultado, e
+          // nunca trocando de tela: a partida vive aqui, e desmontar jogaria a
+          // lista de ações fora.
+          !together && match.result === null && online !== undefined ? (
+            <Away
+              who={displayNames[seat === 'blue' ? 'orange' : 'blue']}
+              onClaim={() => online.transport.send({ kind: 'claim' })}
+            />
+          ) : (
           <Outcome
             result={match.result}
             actions={match.actions.length}
             tone={tone}
             names={displayNames}
           />
+          )
         }
       />
 

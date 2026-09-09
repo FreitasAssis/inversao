@@ -94,6 +94,14 @@ export type Outbound =
    * simplesmente fechando a aba.
    */
   | { kind: 'over' }
+  /**
+   * "O outro sumiu, encerre."
+   *
+   * **Pede**, não declara. Presença é conhecimento da sala, como o sorteio — um
+   * cliente que declarasse reivindicaria vitória a qualquer momento, com o
+   * adversário sentado ali do lado.
+   */
+  | { kind: 'claim' }
 
 const BOARDS = ['nbn', 'bbb', 'dbu']
 const MECHANICS = ['rotation', 'choice']

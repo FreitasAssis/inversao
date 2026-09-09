@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { beforeEach, describe, expect, test } from 'vitest'
-import { render, within } from '@testing-library/react'
+import { act, render, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { App } from '../../src/ui/App'
 import { createRoom } from '../../src/net/transport'
@@ -39,10 +39,10 @@ function table(initiative: Side = 'blue') {
   const orange = render(<App online={{ transport: seats.orange }} />)
   return {
     room: Object.assign(room, {
-      /** Os dois jogadores saindo, como duas abas fechadas. */
-      seatsClosed: () => {
-        seats.blue.close()
-        seats.orange.close()
+      /** Fecha um assento, ou os dois — como abas fechadas. */
+      seatsClosed: (only?: 'blue' | 'orange') => {
+        if (only !== 'orange') seats.blue.close()
+        if (only !== 'blue') seats.orange.close()
       },
     }),
     /** Reassina o azul, como um efeito que remonta faria. */
@@ -387,5 +387,58 @@ describe('os nomes', () => {
     const { blue } = table('blue')
 
     expect(blue.getByRole('status')).toHaveTextContent(/azul|laranja/i)
+  })
+})
+
+describe('quando o adversário some', () => {
+  beforeEach(() => localStorage.clear())
+
+  test('quem fica é avisado, em vez de esperar sem saber', () => {
+    // O buraco visível até aqui: a tela seguia dizendo "Vez de Laranja"
+    // indefinidamente, sem nada indicando que não havia mais ninguém.
+    const { blue, room } = table('blue')
+
+    act(() => room.seatsClosed('orange'))
+
+    expect(blue.getByRole('alert')).toHaveTextContent(/desconectou/i)
+  })
+
+  test('o tabuleiro continua na tela', () => {
+    // Trocar de tela desmontaria o `App` e a partida iria junto.
+    const { blue, room } = table('blue')
+
+    act(() => room.seatsClosed('orange'))
+
+    expect(blue.getByRole('grid', { name: /tabuleiro/i })).toBeInTheDocument()
+  })
+
+  test('o aviso some se ele voltar', () => {
+    const { blue, room } = table('blue')
+    act(() => room.seatsClosed('orange'))
+
+    act(() => {
+      seatIn(room).onReceive(() => {})
+    })
+
+    expect(blue.queryByRole('alert')).toBeNull()
+  })
+
+  test('não avisa nada com os dois na sala', () => {
+    // Assumir ausência no primeiro quadro piscaria "desconectou" em toda
+    // partida.
+    const { blue } = table('blue')
+
+    expect(blue.queryByRole('alert')).toBeNull()
+  })
+
+  test('não avisa depois que a partida acabou', async () => {
+    // Ali o que a tela deve mostrar é o resultado, e a saída do outro é
+    // esperada — a partida terminou.
+    const { blue, room, user } = table('blue')
+
+    await user.click(blue.getByRole('button', { name: /desistir/i }))
+    act(() => room.seatsClosed('orange'))
+
+    expect(blue.getByRole('alert')).toHaveTextContent(/Vitória/)
   })
 })

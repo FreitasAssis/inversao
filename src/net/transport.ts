@@ -188,6 +188,15 @@ export function createRoom(deal: Deal, config: RoomConfig): Room {
           // Espectador não tem por onde jogar, e a regra mora aqui — não num
           // botão desabilitado em alguma tela.
           if (!open || side === undefined) return
+          if (message.kind === 'claim') {
+            // A sala confere antes de declarar: só encerra se o outro lado
+            // estiver mesmo fora. É a mesma regra do sorteio — quem sabe quem
+            // está na sala é ela.
+            const other = side === 'blue' ? 'orange' : 'blue'
+            if (taken.has(other)) return
+            broadcast('server', { type: 'abandon', winner: side })
+            return
+          }
           if (message.kind === 'over') {
             finished = true
             return
