@@ -130,6 +130,7 @@ function parse(data: unknown): Outbound | null {
     }
     if (message.kind === 'ready') return { kind: 'ready' }
     if (message.kind === 'over') return { kind: 'over' }
+    if (message.kind === 'claim') return { kind: 'claim' }
     return null
   } catch {
     return null

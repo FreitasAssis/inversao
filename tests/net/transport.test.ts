@@ -590,3 +590,52 @@ describe('como cada lado se chama', () => {
     expect(namesIn(heard)).toEqual({ blue: 'Luiz', orange: 'Ana' })
   })
 })
+
+describe('encerrar por abandono', () => {
+  test('a sala declara quando o outro está mesmo fora', () => {
+    const here = room()
+    const first = enter(here)
+    const second = enter(here)
+
+    second.transport.close()
+    first.transport.send({ kind: 'claim' })
+
+    expect(actions(first.heard).at(-1)?.action).toEqual({ type: 'abandon', winner: 'blue' })
+    expect(actions(first.heard).at(-1)?.from).toBe('server')
+  })
+
+  test('recusa com o adversário sentado ali', () => {
+    // Sem a conferência, um cliente reivindicaria vitória a qualquer momento —
+    // é a mesma regra do sorteio: quem sabe quem está na sala é ela.
+    const here = room()
+    const first = enter(here)
+    enter(here)
+
+    first.transport.send({ kind: 'claim' })
+
+    expect(actions(first.heard)).toHaveLength(0)
+  })
+
+  test('espectador não encerra partida alheia', () => {
+    const here = room()
+    const first = enter(here)
+    const second = enter(here)
+    const watcher = enter(here)
+
+    second.transport.close()
+    watcher.transport.send({ kind: 'claim' })
+
+    expect(actions(first.heard)).toHaveLength(0)
+  })
+
+  test('quem encerra é quem vence', () => {
+    const here = room()
+    const first = enter(here)
+    const second = enter(here)
+
+    first.transport.close()
+    second.transport.send({ kind: 'claim' })
+
+    expect(actions(second.heard).at(-1)?.action).toEqual({ type: 'abandon', winner: 'orange' })
+  })
+})
