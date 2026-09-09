@@ -131,6 +131,7 @@ function parse(data: unknown): Outbound | null {
     if (message.kind === 'ready') return { kind: 'ready' }
     if (message.kind === 'over') return { kind: 'over' }
     if (message.kind === 'claim') return { kind: 'claim' }
+    if (message.kind === 'rematch') return { kind: 'rematch' }
     return null
   } catch {
     return null

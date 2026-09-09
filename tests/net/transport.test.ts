@@ -639,3 +639,140 @@ describe('encerrar por abandono', () => {
     expect(actions(second.heard).at(-1)?.action).toEqual({ type: 'abandon', winner: 'orange' })
   })
 })
+
+describe('a revanche', () => {
+  const peers = (heard: Inbound[]) =>
+    heard.filter((m) => m.kind === 'peer') as Extract<Inbound, { kind: 'peer' }>[]
+  const welcomes = (heard: Inbound[]) =>
+    heard.filter((m) => m.kind === 'welcome') as Extract<Inbound, { kind: 'welcome' }>[]
+
+  /** Uma sala com os dois sentados e um lance jogado. */
+  function played() {
+    const here = room()
+    const blue = enter(here)
+    const orange = enter(here)
+    act0(blue)
+    return { here, blue, orange }
+  }
+
+  test('não recomeça com um lado só pedindo', () => {
+    // Recomeçar sozinho apagaria o resultado do outro sem ele concordar.
+    const { here, blue } = played()
+
+    blue.transport.send({ kind: 'rematch' })
+
+    expect(here.log()).toHaveLength(1)
+  })
+
+  test('recomeça quando os dois pedem', () => {
+    const { here, blue, orange } = played()
+
+    blue.transport.send({ kind: 'rematch' })
+    orange.transport.send({ kind: 'rematch' })
+
+    expect(here.log()).toHaveLength(0)
+  })
+
+  test('troca os lados', () => {
+    // No Rodízio quem abre tem vitória forçada em três dos cinco casos, então
+    // jogar de novo do mesmo lado é jogar a mesma partida.
+    const { blue, orange } = played()
+
+    blue.transport.send({ kind: 'rematch' })
+    orange.transport.send({ kind: 'rematch' })
+
+    expect(welcomes(blue.heard).at(-1)?.seat).toBe('orange')
+    expect(welcomes(orange.heard).at(-1)?.seat).toBe('blue')
+  })
+
+  test('leva o nome junto do lado', () => {
+    const here = room()
+    const blue = { heard: [] as Inbound[], transport: here.join('c1', 'Luiz') }
+    blue.transport?.onReceive((m) => blue.heard.push(m))
+    const orange = { heard: [] as Inbound[], transport: here.join('c2', 'Ana') }
+    orange.transport?.onReceive((m) => orange.heard.push(m))
+
+    blue.transport?.send({ kind: 'rematch' })
+    orange.transport?.send({ kind: 'rematch' })
+
+    expect(peers(blue.heard).at(-1)?.names).toEqual({ blue: 'Ana', orange: 'Luiz' })
+  })
+
+  test('a sequência volta a zero', () => {
+    // O contador do cliente zera ao receber as boas-vindas, que é o que a
+    // revanche reemite. Zerar aqui e não lá deixaria o cliente adiante da sala,
+    // descartando a partida nova inteira em silêncio.
+    const { here, blue, orange } = played()
+
+    blue.transport.send({ kind: 'rematch' })
+    orange.transport.send({ kind: 'rematch' })
+    act0(orange)
+
+    expect(here.log()[0]?.seq).toBe(0)
+  })
+
+  test('quem manda o primeiro lance é quem agora é azul', () => {
+    // Se o carimbo saísse de uma variável fixada na entrada, a revanche
+    // continuaria assinando pelos lados velhos.
+    const { here, blue, orange } = played()
+
+    blue.transport.send({ kind: 'rematch' })
+    orange.transport.send({ kind: 'rematch' })
+    act0(blue)
+
+    expect(here.log()[0]?.from).toBe('orange')
+  })
+
+  test('não manda ninguém de volta ao aperto de mão', () => {
+    // Os dois já pediram: confirmar de novo seria pedir duas vezes a mesma
+    // coisa.
+    const { blue, orange } = played()
+
+    blue.transport.send({ kind: 'rematch' })
+    orange.transport.send({ kind: 'rematch' })
+
+    expect(peers(blue.heard).at(-1)?.ready).toEqual({ blue: true, orange: true })
+  })
+
+  test('reabre a sala que tinha acabado', () => {
+    const { here, blue, orange } = played()
+    blue.transport.send({ kind: 'over' })
+
+    blue.transport.send({ kind: 'rematch' })
+    orange.transport.send({ kind: 'rematch' })
+    blue.transport.close()
+    orange.transport.close()
+
+    expect(here.join()).not.toBeNull()
+  })
+
+  test('quem volta depois senta no lado novo', () => {
+    // O crachá guarda o assento, e a troca precisa alcançá-lo — senão
+    // reconectar desfaria a revanche.
+    const here = room()
+    here.join('c1')?.onReceive(() => {})
+    const orange = { heard: [] as Inbound[], transport: here.join('c2') }
+    orange.transport?.onReceive((m) => orange.heard.push(m))
+    const blueAgain = here.join('c1')
+    blueAgain?.onReceive(() => {})
+
+    blueAgain?.send({ kind: 'rematch' })
+    orange.transport?.send({ kind: 'rematch' })
+    blueAgain?.close()
+
+    const back: Inbound[] = []
+    here.join('c1')?.onReceive((m) => back.push(m))
+    expect(welcomes(back).at(-1)?.seat).toBe('orange')
+  })
+
+  test('espectador não pede revanche', () => {
+    const { here, blue, orange } = played()
+    const watcher = enter(here)
+
+    watcher.transport.send({ kind: 'rematch' })
+    blue.transport.send({ kind: 'rematch' })
+
+    expect(here.log()).toHaveLength(1)
+    expect(orange.heard.length).toBeGreaterThan(0)
+  })
+})

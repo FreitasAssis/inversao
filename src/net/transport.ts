@@ -51,15 +51,6 @@ export type Room = {
 }
 
 /**
- * A sala em memória, com a mesma lógica que o Durable Object terá.
- *
- * Não é um dublê simplificado de propósito: carimbar autor, numerar, sentar
- * quem chega e sortear uma vez por rodada é *tudo* o que a sala faz, então
- * tê-la aqui quer dizer que os testes de duas telas exercitam a lógica de
- * verdade — e que portar para o Durable Object é mudar o transporte, não a
- * regra.
- */
-/**
  * Quantas conexões uma sala aguenta.
  *
  * Dois jogadores e um número folgado de espectadores. Não é um limite de
@@ -69,25 +60,53 @@ export type Room = {
  */
 export const ROOM_LIMIT = 64
 
+const other = (side: Side): Side => (side === 'blue' ? 'orange' : 'blue')
+
+/**
+ * Uma conexão, do ponto de vista da sala.
+ *
+ * O lado é **mutável** por causa da revanche: ela troca os lados sem ninguém
+ * reconectar, e as conexões precisam passar a carimbar pelo lado novo.
+ */
+type Party = {
+  side: Side | undefined
+  token: string | undefined
+  /** Entrega a esta conexão, e só a ela. As boas-vindas são pessoais. */
+  deliver: (message: Inbound) => void
+}
+
+/**
+ * A sala em memória, com a mesma lógica que o Durable Object tem.
+ *
+ * Não é um dublê simplificado de propósito: carimbar autor, numerar, sentar
+ * quem chega e sortear uma vez por rodada é *tudo* o que a sala faz, então
+ * tê-la aqui quer dizer que os testes de duas telas exercitam a lógica de
+ * verdade — e que portar para o Durable Object é mudar o transporte, não a
+ * regra.
+ */
 export function createRoom(deal: Deal, config: RoomConfig): Room {
   let seq = 0
   let established = false
-  const dealt = new Map<number, Side>()
-  const log: SequencedAction[] = []
+  let dealt = new Map<number, Side>()
+  let log: SequencedAction[] = []
   const taken = new Set<Side>()
   /** Conexões abertas, jogadores e espectadores juntos. */
   let present = 0
   /** Qual assento cada crachá guarda. */
   const holders = new Map<string, Side>()
   /** Como cada lado se chama, para as duas telas dizerem o mesmo. */
-  const names: Record<Side, string> = { blue: '', orange: '' }
+  let names: Record<Side, string> = { blue: '', orange: '' }
   /** Como despejar quem está sentado agora, por lado. */
   const seated = new Map<Side, () => void>()
   /** Todo mundo que está ouvindo, com ou sem assento. */
   let listeners: ((message: Inbound) => void)[] = []
+  /** Quem está conectado, para as boas-vindas de uma revanche. */
+  let parties: Party[] = []
 
   /** Quem já apertou o botão de começar. */
-  const readied = new Set<Side>()
+  let readied = new Set<Side>()
+  /** Quem pediu revanche. A partida só recomeça com os dois. */
+  let wants = new Set<Side>()
   /** A partida terminou, segundo quem estava jogando. */
   let finished = false
 
@@ -120,6 +139,52 @@ export function createRoom(deal: Deal, config: RoomConfig): Room {
     for (const listen of [...listeners]) listen({ kind: 'action', message })
   }
 
+  /**
+   * Recomeça a partida com os lados trocados.
+   *
+   * A troca não é enfeite: no Rodízio quem abre tem vitória forçada em três dos
+   * cinco casos, então jogar de novo do mesmo lado é jogar a mesma partida.
+   *
+   * **Tudo o que numera zera junto.** A sequência volta a zero, e o contador do
+   * cliente também — ele o faz ao receber as boas-vindas, que é justamente o que
+   * esta função reemite. Zerar aqui e não lá deixaria o cliente adiante da sala,
+   * descartando a partida nova inteira em silêncio: a mesma classe de defeito
+   * que já travou tudo uma vez.
+   */
+  const restart = () => {
+    seq = 0
+    log = []
+    dealt = new Map()
+    finished = false
+    wants = new Set()
+    // Os dois pediram, então os dois já confirmaram: mandá-los ao aperto de mão
+    // de novo seria pedir duas vezes a mesma coisa.
+    readied = new Set(['blue', 'orange'])
+
+    names = { blue: names.orange, orange: names.blue }
+    for (const [token, side] of [...holders]) holders.set(token, other(side))
+    const wasBlue = seated.get('blue')
+    const wasOrange = seated.get('orange')
+    seated.clear()
+    if (wasOrange !== undefined) seated.set('blue', wasOrange)
+    if (wasBlue !== undefined) seated.set('orange', wasBlue)
+    for (const party of parties) {
+      if (party.side !== undefined) party.side = other(party.side)
+    }
+
+    // Boas-vindas são pessoais — cada um precisa saber o **seu** lado novo —,
+    // então vão por conexão, e não pelo broadcast.
+    for (const party of [...parties]) {
+      party.deliver({
+        kind: 'welcome',
+        seat: party.side ?? 'spectator',
+        config,
+        first: false,
+      })
+    }
+    announce()
+  }
+
   return {
     log: () => log,
     join(token?: string, name?: string): Transport | null {
@@ -144,7 +209,6 @@ export function createRoom(deal: Deal, config: RoomConfig): Room {
       if (finished && taken.size === 0) return null
       present += 1
       const side = claimed ?? (['blue', 'orange'] as const).find((seat) => !taken.has(seat))
-      const seat: Seat = side ?? 'spectator'
       if (side !== undefined) {
         taken.add(side)
         // O crachá passa a guardar este assento, e é com ele que se volta.
@@ -155,14 +219,24 @@ export function createRoom(deal: Deal, config: RoomConfig): Room {
       }
       const first = !established
       established = true
+
+      let open = true
+      /** Os desta conexão, para `close` levar todos embora. */
+      let mine: ((message: Inbound) => void)[] = []
+      const party: Party = {
+        side,
+        token,
+        deliver: (message) => {
+          for (const listen of [...mine]) listen(message)
+        },
+      }
+      parties = [...parties, party]
+
       // Anuncia ao entrar, e não ao assinar: sentar é o que muda a ocupação, e
       // prender o aviso à assinatura fazia uma conexão que ainda não escutou
       // ficar invisível para os outros. Quem acabou de chegar recebe o valor
       // atual na própria assinatura, logo abaixo.
       announce()
-      let open = true
-      /** Os desta conexão, para `close` levar todos embora. */
-      let mine: ((message: Inbound) => void)[] = []
 
       const closeMe = () => {
         if (!open) return
@@ -172,12 +246,13 @@ export function createRoom(deal: Deal, config: RoomConfig): Room {
         // recebendo a partida inteira, e no Durable Object seria um `send`
         // num socket já fechado a cada lance.
         listeners = listeners.filter((one) => !mine.includes(one))
+        parties = parties.filter((one) => one !== party)
         mine = []
         // O assento volta a ficar livre, e é isso que faz reconectar
         // funcionar: quem volta senta no mesmo lugar e recebe o log inteiro.
-        if (side !== undefined) {
-          if (seated.get(side) === closeMe) seated.delete(side)
-          taken.delete(side)
+        if (party.side !== undefined) {
+          if (seated.get(party.side) === closeMe) seated.delete(party.side)
+          taken.delete(party.side)
           announce()
         }
       }
@@ -187,14 +262,29 @@ export function createRoom(deal: Deal, config: RoomConfig): Room {
         send(message) {
           // Espectador não tem por onde jogar, e a regra mora aqui — não num
           // botão desabilitado em alguma tela.
-          if (!open || side === undefined) return
+          //
+          // O lado sai da conexão, e não de uma variável fixada na entrada: a
+          // revanche troca os lados sem ninguém reconectar.
+          const seat = party.side
+          if (!open || seat === undefined) return
+
           if (message.kind === 'claim') {
             // A sala confere antes de declarar: só encerra se o outro lado
             // estiver mesmo fora. É a mesma regra do sorteio — quem sabe quem
             // está na sala é ela.
-            const other = side === 'blue' ? 'orange' : 'blue'
-            if (taken.has(other)) return
-            broadcast('server', { type: 'abandon', winner: side })
+            if (taken.has(other(seat))) return
+            broadcast('server', { type: 'abandon', winner: seat })
+            return
+          }
+          if (message.kind === 'rematch') {
+            // Os dois precisam querer. Um lado só recomeçando a partida seria
+            // apagar o resultado do outro sem ele concordar.
+            wants.add(seat)
+            if (wants.size < 2) {
+              announce()
+              return
+            }
+            restart()
             return
           }
           if (message.kind === 'over') {
@@ -202,7 +292,7 @@ export function createRoom(deal: Deal, config: RoomConfig): Room {
             return
           }
           if (message.kind === 'ready') {
-            readied.add(side)
+            readied.add(seat)
             announce()
             return
           }
@@ -210,7 +300,7 @@ export function createRoom(deal: Deal, config: RoomConfig): Room {
             // O `from` é do assento, nunca do que o cliente disse. É a única
             // coisa que precisa ser inforjável, e a sala a sabe sem saber nada
             // do jogo.
-            broadcast(side, message.action)
+            broadcast(seat, message.action)
             return
           }
           // Sorteia uma vez por rodada. Os dois clientes pedem, e o segundo
@@ -232,7 +322,7 @@ export function createRoom(deal: Deal, config: RoomConfig): Room {
           // enquanto o primeiro já teria o sorteio da rodada. É o mesmo
           // mecanismo da reconexão — a partida é estado inicial mais lista de
           // ações, e assinar é receber a lista.
-          listen({ kind: 'welcome', seat, config, first })
+          listen({ kind: 'welcome', seat: party.side ?? 'spectator', config, first })
           listen({
             kind: 'peer',
             present: paired(),
