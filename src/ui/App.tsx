@@ -285,6 +285,9 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700, online }: AppP
    */
   const [together, setTogether] = useState(true)
 
+  /** Quem já pediu revanche, para a tela saber se está esperando o outro. */
+  const [wanted, setWanted] = useState(false)
+
   const [match, setMatch] = useState<Match>(() => restored?.match ?? startMatch(config))
   const [matchSeed, setMatchSeed] = useState(() => restored?.seed ?? seed ?? Date.now())
 
@@ -543,7 +546,10 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700, online }: AppP
         //
         // Montar a partida a partir do painel e corrigir depois perderia o log
         // — o efeito de configuração reiniciaria a partida um quadro adiante.
+        // Uma revanche chega por aqui: ela reemite as boas-vindas, e este bloco
+        // já zera tudo o que precisa zerar — assento, contador e partida.
         setSeat(inbound.seat)
+        setWanted(false)
         setBoard(inbound.config.board)
         setMechanic(inbound.config.mechanic)
         update({ evaluation: inbound.config.evaluation })
@@ -994,6 +1000,25 @@ export function App({ drawDelayMs = 550, seed, telegraphMs = 700, online }: AppP
 
       {table !== null && (
         <p className="ready">Análise completa disponível</p>
+      )}
+
+      {/*
+        A revanche fica junto do card, no fim da partida: é ali que a pergunta
+        "de novo?" acontece. Os dois precisam pedir, então o botão vira espera
+        depois do clique em vez de sumir.
+      */}
+      {match.result !== null && online !== undefined && (
+        <button
+          type="button"
+          className="restart"
+          disabled={wanted}
+          onClick={() => {
+            setWanted(true)
+            online.transport.send({ kind: 'rematch' })
+          }}
+        >
+          {wanted ? 'Esperando o adversário aceitar' : 'Revanche'}
+        </button>
       )}
 
       {shareable !== null && <ShareButton text={shareable.text} card={shareable.card} />}

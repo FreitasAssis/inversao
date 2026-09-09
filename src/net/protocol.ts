@@ -102,6 +102,15 @@ export type Outbound =
    * adversário sentado ali do lado.
    */
   | { kind: 'claim' }
+  /**
+   * "Vamos de novo."
+   *
+   * Os **dois** precisam pedir: um lado só recomeçando apagaria o resultado do
+   * outro sem ele concordar. Ao recomeçar, os lados trocam — no Rodízio quem
+   * abre tem vitória forçada em três dos cinco casos, então jogar de novo do
+   * mesmo lado é jogar a mesma partida.
+   */
+  | { kind: 'rematch' }
 
 const BOARDS = ['nbn', 'bbb', 'dbu']
 const MECHANICS = ['rotation', 'choice']

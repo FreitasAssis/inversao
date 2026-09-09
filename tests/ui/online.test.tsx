@@ -442,3 +442,61 @@ describe('quando o adversário some', () => {
     expect(blue.getByRole('alert')).toHaveTextContent(/Vitória/)
   })
 })
+
+describe('a revanche', () => {
+  beforeEach(() => localStorage.clear())
+
+  test('não é oferecida durante a partida', () => {
+    const { blue } = table('blue')
+
+    expect(blue.queryByRole('button', { name: /revanche/i })).toBeNull()
+  })
+
+  test('aparece quando a partida acaba', async () => {
+    const { blue, user } = table('blue')
+
+    await user.click(blue.getByRole('button', { name: /desistir/i }))
+
+    expect(blue.getByRole('button', { name: /revanche/i })).toBeInTheDocument()
+  })
+
+  test('espera o outro em vez de recomeçar sozinho', async () => {
+    // Recomeçar sozinho apagaria o resultado do adversário sem ele concordar.
+    const { blue, user } = table('blue')
+    await user.click(blue.getByRole('button', { name: /desistir/i }))
+
+    await user.click(blue.getByRole('button', { name: /revanche/i }))
+
+    expect(blue.getByRole('button', { name: /esperando o adversário/i })).toBeDisabled()
+    expect(blue.getByRole('alert')).toHaveTextContent(/Vitória/)
+  })
+
+  test('recomeça com os lados trocados quando os dois pedem', async () => {
+    const { blue, orange, user } = table('blue')
+    await user.click(blue.getByRole('button', { name: /desistir/i }))
+
+    await user.click(blue.getByRole('button', { name: /revanche/i }))
+    await user.click(orange.getByRole('button', { name: /revanche/i }))
+
+    // Sem resultado na tela: é uma partida nova.
+    expect(blue.queryByRole('alert')).toBeNull()
+    expect(orange.queryByRole('alert')).toBeNull()
+  })
+
+  test('a partida nova aceita lances, em vez de travar em silêncio', async () => {
+    // O contador de sequência do cliente zera com as boas-vindas que a revanche
+    // reemite. Zerando só de um lado, ele ficaria adiante da sala e descartaria
+    // a partida nova inteira.
+    const { blue, orange, room, user } = table('blue')
+    await user.click(blue.getByRole('button', { name: /desistir/i }))
+    await user.click(blue.getByRole('button', { name: /revanche/i }))
+    await user.click(orange.getByRole('button', { name: /revanche/i }))
+
+    // Quem era laranja agora é azul, e é dele a vez.
+    await user.click(orange.getByRole('gridcell', { name: /^A1,/ }))
+    await user.click(orange.getByRole('gridcell', { name: /^B1,/ }))
+
+    expect(room.log().filter((m) => m.action.type === 'move')).toHaveLength(1)
+    expect(seen(blue)).toBe(seen(orange))
+  })
+})
